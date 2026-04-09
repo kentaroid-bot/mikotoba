@@ -1,26 +1,97 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: light;
+  --color-primary: #000666;
+  --color-primary-container: #1a237e;
+  --color-secondary: #b6171e;
+  --color-secondary-container: #da3433;
+  --color-tertiary-fixed-dim: #f8bd2a;
+  --color-surface: #f7f9fc;
+  --color-surface-container-low: #f2f4f7;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-high: #e6e8eb;
+  --color-surface-container-highest: #e0e3e6;
+  --color-on-surface: #191c1e;
+  --color-on-surface-variant: #454652;
+  --color-on-primary: #ffffff;
+  --color-on-secondary: #ffffff;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: var(--color-primary);
+  --color-primary-container: var(--color-primary-container);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-container: var(--color-secondary-container);
+  --color-tertiary-fixed-dim: var(--color-tertiary-fixed-dim);
+  --color-surface: var(--color-surface);
+  --color-surface-container-low: var(--color-surface-container-low);
+  --color-surface-container-lowest: var(--color-surface-container-lowest);
+  --color-surface-container-high: var(--color-surface-container-high);
+  --color-surface-container-highest: var(--color-surface-container-highest);
+  --color-on-surface: var(--color-on-surface);
+  --color-on-surface-variant: var(--color-on-surface-variant);
+  --color-on-primary: var(--color-on-primary);
+  --color-on-secondary: var(--color-on-secondary);
+  --font-body: var(--font-plus);
+  --font-headline: var(--font-plus);
+  --font-label: var(--font-space);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+}
+
+.font-body {
+  font-family: var(--font-plus), "Plus Jakarta Sans", "Helvetica Neue", Arial,
+    sans-serif;
+}
+
+.font-headline {
+  font-family: var(--font-plus), "Plus Jakarta Sans", "Helvetica Neue", Arial,
+    sans-serif;
+}
+
+.font-label {
+  font-family: var(--font-space), "Space Grotesk", "Helvetica Neue", Arial,
+    sans-serif;
+  letter-spacing: 0.08em;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+@keyframes guardian-progress {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
+}
+
+.guardian-progress {
+  animation: guardian-progress 2s ease-in-out infinite;
+}
+
+.chat-logo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  transform: rotate(90deg);
+  transform-origin: center;
+  font-family: "Baskerville", "Baskerville Old Face", "Hoefler Text",
+    "Times New Roman", serif;
+  font-size: 2.04rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  color: var(--color-primary);
+  border: 1.5px solid var(--color-primary);
+  border-radius: 9999px;
+  text-shadow: none;
 }

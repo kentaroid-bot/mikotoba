@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+.dev.vars*
 
 # vercel
 .vercel
@@ -39,3 +40,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# clerk configuration (can include secrets)
+/.clerk/
+
+# cloudflare / opennext build artifacts
+/.open-next/
+/.wrangler/
+
+# local workspace data
+/.agents/
+/backups/
+/skills/
+/skills-lock.json
+*.swp

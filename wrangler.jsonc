@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "musubi-ink",
+  "main": ".open-next/worker.js",
+  "workers_dev": true,
+  "preview_urls": true,
+  "compatibility_date": "2026-04-09",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "routes": [
+    {
+      "pattern": "musubi.ink",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.musubi.ink",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
