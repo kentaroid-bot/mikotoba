@@ -4,7 +4,7 @@ import { v } from "convex/values";
 type UiStringSeed = {
   page: string;
   key: string;
-  locale: "ja" | "en" | "zh" | "hi";
+  locale: "ja" | "en" | "zh" | "hi" | "fr";
   text: string;
 };
 
@@ -19,6 +19,7 @@ const JA_UI_STRINGS: UiStringSeed[] = [
   { page: "chat", key: "group_unjoined", locale: "ja", text: "グループ未参加" },
   { page: "chat", key: "select_group_sr", locale: "ja", text: "チャットを選択" },
   { page: "chat", key: "status_report", locale: "ja", text: "Status Report" },
+  { page: "chat", key: "post_window", locale: "ja", text: "投稿時間: 6:00 - 22:00" },
   { page: "chat", key: "daily_remaining_tpl", locale: "ja", text: "今日の残り投稿: あと{remaining} 回" },
   { page: "chat", key: "limit_label", locale: "ja", text: "LIMIT" },
   { page: "chat", key: "max_chars", locale: "ja", text: "1回につき200文字以内" },
@@ -29,7 +30,8 @@ const JA_UI_STRINGS: UiStringSeed[] = [
     locale: "ja",
     text: "管理者からの招待リンクを開いて参加するか、プロフィール画面から新しいグループを作成してください。",
   },
-  { page: "chat", key: "loading_guardian", locale: "ja", text: "ルフィが確認中..." },
+  { page: "chat", key: "loading_guardian", locale: "ja", text: "{name}が確認中..." },
+  { page: "chat", key: "guardian_default_name", locale: "ja", text: "AIヒーロー" },
   { page: "chat", key: "compose_placeholder", locale: "ja", text: "想いを言葉にしよう..." },
   { page: "chat", key: "error_daily_limit", locale: "ja", text: "今日の投稿回数上限に達しました。" },
   { page: "chat", key: "error_send", locale: "ja", text: "送信に失敗しました。" },
@@ -262,10 +264,10 @@ const JA_UI_STRINGS: UiStringSeed[] = [
   { page: "invite", key: "error_expired", locale: "ja", text: "この招待リンクは期限切れです。" },
   { page: "invite", key: "error_join", locale: "ja", text: "参加に失敗しました。" },
 
-  { page: "sign_in", key: "title", locale: "ja", text: "ことばむすび" },
+  { page: "sign_in", key: "title", locale: "ja", text: "みことば" },
   { page: "sign_in", key: "subtitle", locale: "ja", text: "日々の言葉や出来事を届けよう。" },
-  { page: "sign_up", key: "title", locale: "ja", text: "言の葉ガーディアン" },
-  { page: "sign_up", key: "subtitle", locale: "ja", text: "Google またはメールで登録し、クラスの言葉を守りましょう。" },
+  { page: "sign_up", key: "title", locale: "ja", text: "みことば" },
+  { page: "sign_up", key: "subtitle", locale: "ja", text: "日々の言葉や出来事を届けよう。" },
 ];
 
 const EN_OVERRIDES: Record<string, string> = {
@@ -277,12 +279,14 @@ const EN_OVERRIDES: Record<string, string> = {
   "chat.subtitle": "Post up to 3 times a day about your moments and thoughts.",
   "chat.group_unjoined": "No Group Joined",
   "chat.select_group_sr": "Select chat group",
+  "chat.post_window": "Posting time: 6:00 - 22:00",
   "chat.daily_remaining_tpl": "Remaining posts today: {remaining}",
   "chat.max_chars": "Up to 200 characters per post",
   "chat.not_joined_title": "You have not joined a group yet",
   "chat.not_joined_desc":
     "Open an invite link from an admin, or create a new group from Profile.",
-  "chat.loading_guardian": "Facilitator is checking...",
+  "chat.loading_guardian": "{name} is checking...",
+  "chat.guardian_default_name": "AI Facilitator",
   "chat.compose_placeholder": "Put your thoughts into words...",
   "chat.error_daily_limit": "You reached today\u2019s post limit.",
   "chat.error_send": "Failed to send.",
@@ -450,12 +454,10 @@ const EN_OVERRIDES: Record<string, string> = {
   "invite.join": "Join this class",
   "invite.error_expired": "This invite link has expired.",
   "invite.error_join": "Failed to join.",
-  "sign_in.title": "Kotonoha Guardian",
-  "sign_in.subtitle":
-    "Safely share your words in the class you joined via invite link.",
-  "sign_up.title": "Kotonoha Guardian",
-  "sign_up.subtitle":
-    "Sign up with Google or email and protect class communication.",
+  "sign_in.title": "mikotoba",
+  "sign_in.subtitle": "Share your daily words and moments.",
+  "sign_up.title": "mikotoba",
+  "sign_up.subtitle": "Share your daily words and moments.",
 };
 
 const ZH_OVERRIDES: Record<string, string> = {
@@ -499,7 +501,9 @@ const ZH_OVERRIDES: Record<string, string> = {
   "chat.like_aria": "被AI辅导员的言论塑造成心形",
   "chat.like_title": "使用此声明作为您下一个语气的参考。",
   "chat.limit_label": "限制",
-  "chat.loading_guardian": "路飞正在检查...",
+  "chat.post_window": "发帖时间: 6:00 - 22:00",
+  "chat.loading_guardian": "{name} 正在确认...",
+  "chat.guardian_default_name": "AI 协调员",
   "chat.max_chars": "每次最多 200 个字符",
   "chat.not_joined_desc": "打开管理员的邀请链接加入，或从您的个人资料屏幕创建新群组。",
   "chat.not_joined_title": "还没有加入群组",
@@ -636,10 +640,10 @@ const ZH_OVERRIDES: Record<string, string> = {
   "profile.weekly_badge": "进步",
   "profile.weekly_positive": "积极的帖子",
   "profile.weekly_title": "本周轨迹",
-  "sign_in.subtitle": "使用邀请链接放心地将您的消息传递给您加入的班级。",
-  "sign_in.title": "言语的守护者",
-  "sign_up.subtitle": "在 Google 或电子邮件上注册并保留您的课堂用语。",
-  "sign_up.title": "言语的守护者",
+  "sign_in.subtitle": "分享每天的话语与发生的事。",
+  "sign_in.title": "mikotoba",
+  "sign_up.subtitle": "分享每天的话语与发生的事。",
+  "sign_up.title": "mikotoba",
 };
 
 const HI_OVERRIDES: Record<string, string> = {
@@ -683,7 +687,9 @@ const HI_OVERRIDES: Record<string, string> = {
   "chat.like_aria": "एआई फैसिलिटेटर की टिप्पणियों से दिल को आकार मिला",
   "chat.like_title": "इस कथन को अपने अगले स्वर के संदर्भ के रूप में उपयोग करें।",
   "chat.limit_label": "आप LIMIT",
-  "chat.loading_guardian": "लफ़ी जाँच कर रहा है...",
+  "chat.post_window": "पोस्ट समय: 6:00 - 22:00",
+  "chat.loading_guardian": "{name} जाँच कर रहा है...",
+  "chat.guardian_default_name": "एआई फ़ैसिलिटेटर",
   "chat.max_chars": "हर बार 200 अक्षर तक",
   "chat.not_joined_desc": "शामिल होने के लिए व्यवस्थापक से आमंत्रण लिंक खोलें, या अपनी प्रोफ़ाइल स्क्रीन से एक नया समूह बनाएं।",
   "chat.not_joined_title": "अभी तक किसी समूह में शामिल नहीं हुए हैं",
@@ -820,10 +826,218 @@ const HI_OVERRIDES: Record<string, string> = {
   "profile.weekly_badge": "प्रगति",
   "profile.weekly_positive": "सकारात्मक पोस्ट",
   "profile.weekly_title": "इस सप्ताह का प्रक्षेप पथ",
-  "sign_in.subtitle": "आमंत्रण लिंक का उपयोग करके जिस कक्षा में आप शामिल हुए थे, उसे मन की शांति के साथ अपना संदेश भेजें।",
-  "sign_in.title": "शब्दों का संरक्षक",
-  "sign_up.subtitle": "Google या ईमेल पर साइन अप करें और अपनी कक्षा के शब्द रखें।",
-  "sign_up.title": "शब्दों का संरक्षक",
+  "sign_in.subtitle": "अपने रोज़ के शब्द और अनुभव साझा करें।",
+  "sign_in.title": "mikotoba",
+  "sign_up.subtitle": "अपने रोज़ के शब्द और अनुभव साझा करें।",
+  "sign_up.title": "mikotoba",
+};
+
+const FR_OVERRIDES: Record<string, string> = {
+  "common_nav.chat": "Écrits Mikoto",
+  "common_nav.announcements": "Repères",
+  "common_nav.diary": "Nœud du jour",
+  "common_nav.profile": "Préparation",
+  "chat.title": "Écrits Mikoto",
+  "chat.subtitle": "Publiez jusqu'à 3 fois par jour vos moments et pensées.",
+  "chat.group_unjoined": "Aucun groupe rejoint",
+  "chat.select_group_sr": "Sélectionner un groupe",
+  "chat.post_window": "Heure de publication : 6:00 - 22:00",
+  "chat.daily_remaining_tpl": "Publications restantes aujourd'hui : {remaining}",
+  "chat.max_chars": "200 caractères max par publication",
+  "chat.not_joined_title": "Vous n'avez pas encore rejoint de groupe",
+  "chat.not_joined_desc":
+    "Ouvrez un lien d'invitation d'un administrateur ou créez un groupe depuis Profil.",
+  "chat.loading_guardian": "{name} vérifie...",
+  "chat.guardian_default_name": "Facilitateur IA",
+  "chat.compose_placeholder": "Mettez vos pensées en mots...",
+  "chat.error_daily_limit": "Vous avez atteint la limite de publications d'aujourd'hui.",
+  "chat.error_send": "Échec de l'envoi.",
+  "chat.error_switch": "Échec du changement de chat.",
+  "chat.error_like": "Échec de la mise à jour du cœur.",
+  "chat.like_aria": "Mettre un cœur à ce message du facilitateur IA",
+  "chat.like_title": "Utiliser ce message comme référence de ton la prochaine fois",
+  "chat.point_suffix": "pts",
+  "announcements.title": "Repères",
+  "announcements.subtitle":
+    "Retrouvons, dans vos échanges, les informations à transmettre vers demain.",
+  "announcements.group_unjoined": "Aucun groupe rejoint",
+  "announcements.select_group_sr": "Sélectionner un groupe",
+  "announcements.tasks_title": "Tâches extraites",
+  "announcements.tasks_desc":
+    "Le facilitateur IA a extrait des informations importantes du chat. Accomplissez-les pour gagner des points.",
+  "announcements.tasks_desc_empty": "Il n'y a aucune annonce pour le moment.",
+  "announcements.no_group_desc": "Les annonces apparaissent après avoir rejoint un groupe.",
+  "announcements.due_prefix": "Échéance",
+  "announcements.importance_prefix": "Priorité",
+  "announcements.chance_title": "Chance de points du jour",
+  "announcements.chance_desc":
+    "En signalant une tâche terminée, le facilitateur IA peut accorder des points bonus. Ce signalement ne consomme pas vos publications quotidiennes.",
+  "announcements.write_report": "Écrire un rapport d'achèvement",
+  "announcements.report_target_label": "Cible du rapport",
+  "announcements.report_placeholder": "Décrivez ce que vous avez terminé (8+ caractères)",
+  "announcements.report_submitting": "Envoi...",
+  "announcements.report_done_badge": "Signalé",
+  "announcements.close_button": "Clore l'annonce",
+  "announcements.close_submitting": "Clôture...",
+  "announcements.close_error": "Échec de la clôture.",
+  "announcements.close_success": "Une annonce sans échéance a été clôturée.",
+  "announcements.empty_title": "Aucune annonce",
+  "announcements.empty_desc": "Les nouvelles annonces importantes apparaîtront ici.",
+  "announcements.report_no_tasks":
+    "Aucune tâche d'annonce à signaler pour le moment.",
+  "announcements.report_select_error": "Veuillez sélectionner une annonce.",
+  "announcements.report_success_tpl":
+    "Rapport publié (+{points} pts). Il apparaît dans Écrits Mikoto.",
+  "announcements.report_char_count_tpl": "{count}/{max}",
+  "announcements.error_switch": "Échec du changement de chat.",
+  "diary.title": "Nœud du jour",
+  "diary.subtitle":
+    "Avant la mise à jour des Écrits Mikoto, gardez vos pensées en un faisceau de mémoire.",
+  "diary.group_unjoined": "Aucun groupe rejoint",
+  "diary.select_group_sr": "Sélectionner un groupe",
+  "diary.date_record_tpl": "Entrée du {date}",
+  "diary.date_missing_tpl": "Aucune entrée pour le {date}",
+  "diary.date_loading": "Chargement de la date...",
+  "diary.back_latest": "Revenir au plus récent",
+  "diary.auto_note":
+    "Les résumés sont générés automatiquement vers 23:55, et l'affichage du chat est réinitialisé à 00:00.",
+  "diary.no_group_desc": "Le journal apparaît après avoir rejoint un groupe.",
+  "diary.no_diary": "Aucun journal pour le moment.",
+  "diary.emotion_title": "Température émotionnelle",
+  "diary.safety_title": "Sentiment de sécurité",
+  "diary.safety_desc": "Davantage de paroles bienveillantes",
+  "diary.activity_title": "Activité",
+  "diary.activity_desc": "Questions et propositions actives",
+  "diary.alerts_title": "Alertes",
+  "diary.alerts_desc": "Résolues grâce à une prise en charge précoce",
+  "diary.alerts_suffix": "éléments",
+  "diary.error_switch": "Échec du changement de chat.",
+  "profile.title": "Préparation",
+  "profile.subtitle": "Préparez ici une communication saine et confortable.",
+  "profile.group_unjoined": "Aucun groupe rejoint",
+  "profile.select_group_sr": "Sélectionner un groupe",
+  "profile.points_title": "Points",
+  "profile.post_count_title": "Publications",
+  "profile.weekly_title": "Cette semaine",
+  "profile.weekly_positive": "Publications positives",
+  "profile.weekly_announcement": "Annonces partagées",
+  "profile.weekly_ai_follow": "Suivis IA",
+  "profile.message_title": "Message",
+  "profile.edit_title": "Modifier le profil",
+  "profile.edit_badge": "Édition",
+  "profile.edit_name_label": "Nom",
+  "profile.edit_guardian_id_label": "ID Gardien (@id)",
+  "profile.edit_guardian_id_placeholder": "@guardian",
+  "profile.edit_class_label": "Affiliation",
+  "profile.edit_message_label": "Message",
+  "profile.save_profile": "Enregistrer le profil",
+  "profile.saving_profile": "Enregistrement...",
+  "profile.saved_profile": "Profil mis à jour.",
+  "profile.groups_title": "Gestion des groupes",
+  "profile.groups_badge": "Groupes",
+  "profile.common_save": "Enregistrer",
+  "profile.common_change": "Modifier",
+  "profile.error_preview": "Impossible de générer l'exemple de ton.",
+  "profile.error_create": "Échec de la création.",
+  "profile.error_invite_create": "Échec de création de l'invitation.",
+  "profile.error_group_switch": "Échec du changement de groupe.",
+  "profile.error_daily_limit_update":
+    "Échec de la mise à jour de la limite quotidienne.",
+  "profile.error_group_rename": "Échec du renommage du groupe.",
+  "profile.error_transfer_admin":
+    "Échec du transfert des droits administrateur.",
+  "profile.error_group_description_update":
+    "Échec de la mise à jour de la description du groupe.",
+  "profile.error_ai_settings_update":
+    "Échec de la mise à jour des paramètres IA.",
+  "profile.error_profile_update": "Échec de la mise à jour du profil.",
+  "profile.group_manage_select_title": "Chat à gérer (menu déroulant)",
+  "profile.group_manage_select_hint": "Sélectionnez le chat à administrer.",
+  "profile.group_manage_no_joined_group":
+    "Vous n'avez encore rejoint aucun chat.",
+  "profile.group_rename_title": "Renommer le groupe",
+  "profile.group_rename_admin_only":
+    "Seuls les administrateurs peuvent renommer le groupe.",
+  "profile.group_description_title": "Description du groupe",
+  "profile.group_description_placeholder":
+    "Ex. Communication de classe (4e). Partage des échéances et informations logistiques.",
+  "profile.group_description_help":
+    "Utilisé comme contexte pour les commentaires, extractions et résumés IA.",
+  "profile.group_description_admin_only":
+    "Seuls les administrateurs peuvent modifier la description du groupe.",
+  "profile.facilitator_title": "Paramètres du facilitateur IA",
+  "profile.facilitator_enable_label":
+    "Activer le facilitateur IA dans ce chat",
+  "profile.facilitator_name_label": "Nom",
+  "profile.facilitator_name_placeholder": "Ex. Mme Luffy",
+  "profile.facilitator_preset_label": "Préréglage de personnalité",
+  "profile.facilitator_preset_encouraging": "Encourageant",
+  "profile.facilitator_preset_watcher": "Observateur",
+  "profile.facilitator_preset_facilitator": "Animateur",
+  "profile.facilitator_preset_disciplined": "Discipliné",
+  "profile.facilitator_gender_label": "Genre (optionnel)",
+  "profile.facilitator_gender_placeholder":
+    "Ex. homme / femme / non défini",
+  "profile.facilitator_age_label": "Âge (optionnel)",
+  "profile.facilitator_age_placeholder": "Ex. 28",
+  "profile.facilitator_first_person_label": "Première personne (optionnel)",
+  "profile.facilitator_first_person_placeholder": "Ex. je",
+  "profile.facilitator_tone_label": "Ton (optionnel)",
+  "profile.facilitator_tone_placeholder": "Ex. poli / décontracté",
+  "profile.facilitator_bio_label": "Notes de personnage (optionnel)",
+  "profile.facilitator_bio_placeholder":
+    "Ex. Esprit sportif, encouragements concis, annonces claires.",
+  "profile.facilitator_preview_title": "Exemple de ton",
+  "profile.facilitator_preview_loading": "Génération de l'exemple...",
+  "profile.facilitator_preview_empty":
+    "Un exemple apparaîtra après saisie des paramètres.",
+  "profile.facilitator_hint":
+    "Les paramètres sont propres à ce chat. Les règles priment sur le ton.",
+  "profile.facilitator_admin_only":
+    "Seuls les administrateurs peuvent modifier les paramètres IA.",
+  "profile.daily_limit_title": "Limite quotidienne de publications",
+  "profile.daily_limit_readonly_prefix": "Limite actuelle",
+  "profile.daily_limit_readonly_suffix":
+    "publications/jour (administrateurs uniquement)",
+  "profile.invite_title": "Lien d'invitation",
+  "profile.invite_max_uses_label": "Utilisations max",
+  "profile.invite_create_button": "Créer un lien d'invitation",
+  "profile.invite_created_suffix_prefix": "(max ",
+  "profile.invite_created_suffix_suffix": " utilisations)",
+  "profile.invite_admin_only":
+    "Seuls les administrateurs peuvent émettre des liens d'invitation.",
+  "profile.members_title": "Membres du groupe",
+  "profile.members_empty": "Aucun membre pour le moment.",
+  "profile.members_select_group":
+    "Sélectionnez un groupe pour afficher ses membres.",
+  "profile.transfer_admin_title": "Transférer les droits administrateur",
+  "profile.transfer_admin_button": "Transférer à cet utilisateur",
+  "profile.transfer_admin_no_candidate":
+    "Aucun membre éligible au transfert.",
+  "profile.transfer_admin_admin_only":
+    "Seuls les administrateurs peuvent transférer les droits administrateur.",
+  "profile.create_group_title": "Créer un nouveau groupe",
+  "profile.create_group_placeholder": "Ex. Chat de la classe 3-B",
+  "profile.create_group_button_prefix": "Créer (",
+  "profile.create_group_button_suffix": " coût en points)",
+  "profile.create_group_hint":
+    "Vous pouvez créer un groupe si vous avez assez de points.",
+  "profile.message_badge": "Orientation",
+  "profile.weekly_badge": "Progrès",
+  "invite.title": "Lien d'invitation",
+  "invite.join_group_tpl": "Rejoindre {groupName}.",
+  "invite.loading": "Chargement des informations d'invitation...",
+  "invite.sign_needed": "Veuillez vous connecter ou vous inscrire pour rejoindre.",
+  "invite.sign_in": "Se connecter",
+  "invite.sign_up": "S'inscrire",
+  "invite.joining": "Participation en cours...",
+  "invite.join": "Rejoindre cette classe",
+  "invite.error_expired": "Ce lien d'invitation a expiré.",
+  "invite.error_join": "Échec de la participation.",
+  "sign_in.title": "mikotoba",
+  "sign_in.subtitle": "Partagez vos mots et vos moments du quotidien.",
+  "sign_up.title": "mikotoba",
+  "sign_up.subtitle": "Partagez vos mots et vos moments du quotidien.",
 };
 
 const LOCALE_OVERRIDES: Record<
@@ -833,26 +1047,36 @@ const LOCALE_OVERRIDES: Record<
   en: EN_OVERRIDES,
   zh: ZH_OVERRIDES,
   hi: HI_OVERRIDES,
+  fr: FR_OVERRIDES,
 };
 
 const DEFAULT_UI_STRINGS: UiStringSeed[] = [
   ...JA_UI_STRINGS,
-  ...(["en", "zh", "hi"] as const).flatMap((locale) =>
+  ...(["en", "zh", "hi", "fr"] as const).flatMap((locale) =>
     JA_UI_STRINGS.map((row) => ({
       ...row,
       locale,
-      text: LOCALE_OVERRIDES[locale][`${row.page}.${row.key}`] ?? row.text,
+      text:
+        LOCALE_OVERRIDES[locale][`${row.page}.${row.key}`] ??
+        (locale === "fr" ? EN_OVERRIDES[`${row.page}.${row.key}`] : undefined) ??
+        row.text,
     }))
   ),
 ];
 
 const normalizeLocale = (value: string | undefined): UiStringSeed["locale"] => {
   const normalized = value?.trim().toLowerCase();
-  if (normalized === "en" || normalized === "zh" || normalized === "hi") {
+  if (
+    normalized === "en" ||
+    normalized === "zh" ||
+    normalized === "hi" ||
+    normalized === "fr"
+  ) {
     return normalized;
   }
   if (normalized?.startsWith("zh")) return "zh";
   if (normalized?.startsWith("hi")) return "hi";
+  if (normalized?.startsWith("fr")) return "fr";
   return "ja";
 };
 
@@ -948,5 +1172,278 @@ export const listPages = query({
   handler: async (ctx) => {
     const rows = await ctx.db.query("uiStrings").collect();
     return Array.from(new Set(rows.map((row) => row.page))).sort();
+  },
+});
+
+export const listDuplicates = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("uiStrings").collect();
+    const grouped = new Map<string, typeof rows>();
+
+    for (const row of rows) {
+      const key = `${row.page}::${row.key}::${row.locale}`;
+      const bucket = grouped.get(key);
+      if (bucket) {
+        bucket.push(row);
+      } else {
+        grouped.set(key, [row]);
+      }
+    }
+
+    return Array.from(grouped.entries())
+      .filter(([, bucket]) => bucket.length > 1)
+      .map(([group, bucket]) => {
+        const [page, key, locale] = group.split("::");
+        const sorted = [...bucket].sort((a, b) => {
+          if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+          return b._creationTime - a._creationTime;
+        });
+        return {
+          page,
+          key,
+          locale,
+          count: bucket.length,
+          newestText: sorted[0]?.text ?? "",
+          oldestText: sorted[sorted.length - 1]?.text ?? "",
+          ids: sorted.map((row) => row._id),
+        };
+      })
+      .sort((a, b) => b.count - a.count);
+  },
+});
+
+export const dedupe = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query("uiStrings").collect();
+    const grouped = new Map<string, typeof rows>();
+
+    for (const row of rows) {
+      const key = `${row.page}::${row.key}::${row.locale}`;
+      const bucket = grouped.get(key);
+      if (bucket) {
+        bucket.push(row);
+      } else {
+        grouped.set(key, [row]);
+      }
+    }
+
+    let deleted = 0;
+    const touchedGroups: string[] = [];
+
+    for (const [group, bucket] of grouped.entries()) {
+      if (bucket.length <= 1) continue;
+      const sorted = [...bucket].sort((a, b) => {
+        if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+        return b._creationTime - a._creationTime;
+      });
+      const [, ...stale] = sorted;
+      for (const row of stale) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+      touchedGroups.push(group);
+    }
+
+    return {
+      groups: touchedGroups.length,
+      deleted,
+      touchedGroups,
+    };
+  },
+});
+
+export const syncSignStrings = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const targets: Array<{
+      locale: UiStringSeed["locale"];
+      title: string;
+      subtitle: string;
+    }> = [
+      {
+        locale: "ja",
+        title: "みことば",
+        subtitle: "日々の言葉や出来事を届けよう。",
+      },
+      {
+        locale: "en",
+        title: "mikotoba",
+        subtitle: "Share your daily words and moments.",
+      },
+      {
+        locale: "zh",
+        title: "mikotoba",
+        subtitle: "分享每天的话语与发生的事。",
+      },
+      {
+        locale: "hi",
+        title: "mikotoba",
+        subtitle: "अपने रोज़ के शब्द और अनुभव साझा करें।",
+      },
+      {
+        locale: "fr",
+        title: "mikotoba",
+        subtitle: "Partagez vos mots et vos moments du quotidien.",
+      },
+    ];
+
+    let inserted = 0;
+    let updated = 0;
+    let deleted = 0;
+
+    const upsertSingle = async (
+      page: "sign_in" | "sign_up",
+      locale: UiStringSeed["locale"],
+      key: "title" | "subtitle",
+      text: string
+    ) => {
+      const rows = await ctx.db
+        .query("uiStrings")
+        .withIndex("by_page_locale", (q) => q.eq("page", page))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("key"), key),
+            q.eq(q.field("locale"), locale)
+          )
+        )
+        .collect();
+
+      if (rows.length === 0) {
+        await ctx.db.insert("uiStrings", {
+          page,
+          key,
+          locale,
+          text,
+          updatedAt: now,
+        });
+        inserted += 1;
+        return;
+      }
+
+      const sorted = [...rows].sort((a, b) => {
+        if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+        return b._creationTime - a._creationTime;
+      });
+
+      const primary = sorted[0];
+      if (primary.text !== text) {
+        await ctx.db.patch(primary._id, {
+          text,
+          updatedAt: now,
+        });
+        updated += 1;
+      }
+
+      for (const stale of sorted.slice(1)) {
+        await ctx.db.delete(stale._id);
+        deleted += 1;
+      }
+    };
+
+    for (const target of targets) {
+      await upsertSingle("sign_in", target.locale, "title", target.title);
+      await upsertSingle("sign_in", target.locale, "subtitle", target.subtitle);
+      await upsertSingle("sign_up", target.locale, "title", target.title);
+      await upsertSingle("sign_up", target.locale, "subtitle", target.subtitle);
+    }
+
+    return {
+      inserted,
+      updated,
+      deleted,
+    };
+  },
+});
+
+export const getById = query({
+  args: {
+    id: v.id("uiStrings"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
+export const setByIdAndSyncLocales = mutation({
+  args: {
+    id: v.id("uiStrings"),
+    jaText: v.string(),
+    enText: v.string(),
+    zhText: v.string(),
+    hiText: v.string(),
+    frText: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const target = await ctx.db.get(args.id);
+    if (!target) {
+      throw new Error("uiStrings record not found.");
+    }
+
+    const now = Date.now();
+    const perLocale: Record<UiStringSeed["locale"], string> = {
+      ja: args.jaText,
+      en: args.enText,
+      zh: args.zhText,
+      hi: args.hiText,
+      fr: args.frText ?? args.enText,
+    };
+
+    let inserted = 0;
+    let updated = 0;
+    let deleted = 0;
+
+    for (const locale of ["ja", "en", "zh", "hi", "fr"] as const) {
+      const rows = await ctx.db
+        .query("uiStrings")
+        .withIndex("by_page_locale", (q) => q.eq("page", target.page))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("key"), target.key),
+            q.eq(q.field("locale"), locale)
+          )
+        )
+        .collect();
+
+      const desiredText = perLocale[locale];
+      if (rows.length === 0) {
+        await ctx.db.insert("uiStrings", {
+          page: target.page,
+          key: target.key,
+          locale,
+          text: desiredText,
+          updatedAt: now,
+        });
+        inserted += 1;
+        continue;
+      }
+
+      const sorted = [...rows].sort((a, b) => {
+        if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
+        return b._creationTime - a._creationTime;
+      });
+      const primary = sorted[0];
+      if (primary.text !== desiredText) {
+        await ctx.db.patch(primary._id, {
+          text: desiredText,
+          updatedAt: now,
+        });
+        updated += 1;
+      }
+      for (const stale of sorted.slice(1)) {
+        await ctx.db.delete(stale._id);
+        deleted += 1;
+      }
+    }
+
+    return {
+      page: target.page,
+      key: target.key,
+      inserted,
+      updated,
+      deleted,
+    };
   },
 });

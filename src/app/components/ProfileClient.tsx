@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useConvexAuth, useMutation, useQuery } from "convex/react";
+import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth, useClerk, useUser } from "@clerk/nextjs";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useUiStrings } from "./useUiStrings";
+import LocaleToggle from "./LocaleToggle";
 
 const FACILITATOR_PRESET_OPTIONS = [
   {
@@ -64,6 +65,7 @@ export default function ProfileClient() {
   const transferAdmin = useMutation(api.groups.transferAdmin);
   const setActiveGroup = useMutation(api.profile.setActiveGroup);
   const updateMyProfile = useMutation(api.profile.updateMy);
+  const syncGroupAvatarsFromClerk = useAction(api.profile.syncGroupAvatarsFromClerk);
   const createInvite = useMutation(api.invites.create);
   const setDailyLimit = useMutation(api.settings.setDailyLimit);
   const createCost = useQuery(api.groups.getCreateCost);
@@ -101,6 +103,7 @@ export default function ProfileClient() {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const ensuringProfileRef = useRef(false);
   const profileHydratedRef = useRef(false);
+  const avatarSyncGroupRef = useRef<string | null>(null);
   const displayGuardianId = profile?.guardianId
     ? profile.guardianId.startsWith("@")
       ? profile.guardianId
@@ -110,18 +113,23 @@ export default function ProfileClient() {
   const activeGroupName = activeGroup?.name ?? "";
 
   useEffect(() => {
+    if (profile === undefined) {
+      return;
+    }
+    const shouldSyncAvatar =
+      Boolean(user?.imageUrl) && profile?.imageUrl !== user?.imageUrl;
     if (
       !isLoaded ||
       !isSignedIn ||
       isConvexLoading ||
       !isConvexAuthenticated ||
-      profile !== null ||
+      (!shouldSyncAvatar && profile !== null) ||
       ensuringProfileRef.current
     ) {
       return;
     }
     ensuringProfileRef.current = true;
-    void ensureProfile()
+    void ensureProfile({ imageUrl: user?.imageUrl })
       .catch((err) => {
         if (!(err instanceof Error) || err.message !== "Unauthorized") {
           console.error(err);
@@ -136,6 +144,7 @@ export default function ProfileClient() {
     isConvexLoading,
     isConvexAuthenticated,
     profile,
+    user?.imageUrl,
     ensureProfile,
   ]);
 
@@ -193,6 +202,20 @@ export default function ProfileClient() {
     setDelegateTargetUserId(firstCandidate?.userId ?? "");
   }, [groupMembers, userId]);
 
+  useEffect(() => {
+    if (!activeGroup?._id || groupRole !== "admin") {
+      avatarSyncGroupRef.current = null;
+      return;
+    }
+    if (avatarSyncGroupRef.current === activeGroup._id) {
+      return;
+    }
+    avatarSyncGroupRef.current = activeGroup._id;
+    void syncGroupAvatarsFromClerk({ groupId: activeGroup._id }).catch((error) => {
+      console.error(error);
+    });
+  }, [activeGroup?._id, groupRole, syncGroupAvatarsFromClerk]);
+
   const inviteUrl = useMemo(() => {
     if (!inviteToken || typeof window === "undefined") return null;
     return `${window.location.origin}/invite/${inviteToken}`;
@@ -206,6 +229,13 @@ export default function ProfileClient() {
     [groupMembers, userId]
   );
   const hasManagedGroups = (managedGroups?.length ?? 0) > 0;
+  const dailyLimitMin = 1;
+  const dailyLimitMax = 10;
+
+  useEffect(() => {
+    if (!activeGroupId || groupRole !== "admin") return;
+    setDailyLimitInput(String(settings?.dailyPostLimit ?? 3));
+  }, [activeGroupId, groupRole, settings?.dailyPostLimit]);
 
   useEffect(() => {
     if (!activeGroupId || groupRole !== "admin") {
@@ -341,8 +371,11 @@ export default function ProfileClient() {
         dailyLimitInput || String(settings?.dailyPostLimit ?? 3),
         10
       );
-      await setDailyLimit({ dailyPostLimit: parsed });
-      setDailyLimitInput("");
+      const safe = Number.isFinite(parsed)
+        ? Math.min(dailyLimitMax, Math.max(dailyLimitMin, parsed))
+        : settings?.dailyPostLimit ?? 3;
+      await setDailyLimit({ dailyPostLimit: safe });
+      setDailyLimitInput(String(safe));
     } catch (err) {
       setError(
         err instanceof Error
@@ -350,6 +383,16 @@ export default function ProfileClient() {
           : t("error_daily_limit_update", "投稿上限の更新に失敗しました。")
       );
     }
+  };
+
+  const adjustDailyLimitInput = (delta: number) => {
+    const current = Number.parseInt(
+      dailyLimitInput || String(settings?.dailyPostLimit ?? 3),
+      10
+    );
+    const base = Number.isFinite(current) ? current : 3;
+    const next = Math.min(dailyLimitMax, Math.max(dailyLimitMin, base + delta));
+    setDailyLimitInput(String(next));
   };
 
   const handleRenameGroup = async () => {
@@ -459,22 +502,20 @@ export default function ProfileClient() {
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
-      <header className="fixed top-0 left-0 w-full z-50 bg-white/70 backdrop-blur-lg shadow-sm shadow-blue-900/5">
-        <div className="flex justify-between items-center px-6 h-16 w-full max-w-4xl mx-auto">
-          <div className="flex items-center gap-2.5">
-            <span className="chat-logo-mark" aria-hidden>
-              三
-            </span>
-            <div>
-              <h1 className="text-xl font-extrabold text-primary tracking-tighter font-headline">
+      <header className="fixed top-0 left-0 w-full z-[60] bg-white/70 backdrop-blur-lg shadow-sm shadow-blue-900/5">
+        <div className="flex justify-between items-center px-4 sm:px-6 h-16 w-full max-w-[var(--app-max-w)] mx-auto gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <LocaleToggle />
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-extrabold text-primary tracking-tighter font-headline whitespace-nowrap">
                 {t("title", "身支度")}
               </h1>
-              <p className="text-[11px] text-on-surface-variant">
+              <p className="hidden text-[11px] text-on-surface-variant sm:block">
                 {t("subtitle", "心地よい交流を支えるための準備をここで行います。")}
               </p>
             </div>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="w-[8.25rem] max-w-[8.25rem] shrink-0 sm:w-full sm:max-w-xs">
             <label className="sr-only" htmlFor="profile-group-select">
               {t("select_group_sr", "チャットを選択")}
             </label>
@@ -486,7 +527,7 @@ export default function ProfileClient() {
                 if (!selectedGroupId || selectedGroupId === activeGroup?._id) return;
                 void handleSwitchGroup(selectedGroupId);
               }}
-              className="w-full rounded-full bg-white/90 px-4 py-2 text-sm font-headline font-semibold text-primary shadow-sm"
+              className="w-full rounded-full bg-white/90 px-3 py-2 text-xs sm:text-sm font-headline font-semibold text-primary shadow-sm"
             >
               {groups?.length ? (
                 groups.map((group) =>
@@ -504,7 +545,7 @@ export default function ProfileClient() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 pt-24 pb-32">
+      <main className="max-w-[var(--app-max-w)] mx-auto px-4 sm:px-6 pt-24 safe-page-bottom">
         <section className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm relative overflow-hidden">
           <div className="absolute -top-24 -right-16 w-60 h-60 rounded-full bg-gradient-to-br from-primary/20 to-secondary/10 blur-2xl" />
           <div className="flex flex-col md:flex-row gap-6 md:items-center">
@@ -573,13 +614,10 @@ export default function ProfileClient() {
 
         <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-surface-container-low p-6 rounded-2xl shadow-sm">
-            <div className="flex items-center justify-between">
+            <div>
               <h3 className="font-headline text-lg font-bold text-primary">
                 {t("weekly_title", "今週の軌跡")}
               </h3>
-              <span className="font-label text-xs uppercase text-secondary">
-                {t("weekly_badge", "Progress")}
-              </span>
             </div>
             <div className="mt-4 space-y-3 text-sm text-on-surface-variant">
               <div className="flex justify-between">
@@ -605,13 +643,10 @@ export default function ProfileClient() {
 
           <div className="bg-surface-container-low p-6 rounded-2xl shadow-sm relative overflow-hidden">
             <div className="absolute -bottom-10 -right-8 w-40 h-40 rounded-full bg-tertiary-fixed-dim/20 blur-2xl" />
-            <div className="flex items-center justify-between">
+            <div>
               <h3 className="font-headline text-lg font-bold text-primary">
                 {t("message_title", "メッセージ")}
               </h3>
-              <span className="font-label text-xs uppercase text-secondary">
-                {t("message_badge", "Guidance")}
-              </span>
             </div>
             <p className="text-sm text-on-surface-variant mt-4">
               {profile?.motto ?? "--"}
@@ -620,13 +655,10 @@ export default function ProfileClient() {
         </section>
 
         <section className="mt-8 bg-surface-container-low p-6 rounded-2xl shadow-sm">
-          <div className="flex items-center justify-between">
+          <div>
             <h3 className="font-headline text-lg font-bold text-primary">
               {t("edit_title", "プロフィール編集")}
             </h3>
-            <span className="font-label text-xs uppercase text-secondary">
-              {t("edit_badge", "Edit")}
-            </span>
           </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
             <label className="flex flex-col gap-2 text-sm">
@@ -697,13 +729,10 @@ export default function ProfileClient() {
 
         {hasManagedGroups ? (
           <section className="mt-10 bg-surface-container-lowest rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center justify-between">
+          <div>
             <h3 className="font-headline text-lg font-bold text-primary">
               {t("groups_title", "グループ管理")}
             </h3>
-            <span className="font-label text-xs uppercase text-secondary">
-              {t("groups_badge", "Groups")}
-            </span>
           </div>
 
           <div className="mt-4 space-y-4">
@@ -976,15 +1005,45 @@ export default function ProfileClient() {
                 {t("daily_limit_title", "日次投稿上限")}
               </p>
               {activeGroup && groupRole === "admin" ? (
-                <div className="mt-3 flex flex-col md:flex-row gap-3">
-                  <input
-                    value={dailyLimitInput || String(settings?.dailyPostLimit ?? 3)}
-                    onChange={(event) => setDailyLimitInput(event.target.value)}
-                    type="number"
-                    min={1}
-                    max={10}
-                    className="w-32 rounded-full px-4 py-2 bg-white/80 text-sm"
-                  />
+                <div className="mt-3 flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="inline-flex items-center rounded-full bg-white/80 p-1 shadow-sm w-fit">
+                    <button
+                      type="button"
+                      onClick={() => adjustDailyLimitInput(-1)}
+                      className="h-10 w-10 rounded-full text-primary text-base font-bold"
+                      aria-label={t("daily_limit_decrease", "投稿上限を1減らす")}
+                    >
+                      -
+                    </button>
+                    <input
+                      value={dailyLimitInput}
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/[^\d]/g, "");
+                        if (!digits) {
+                          setDailyLimitInput("");
+                          return;
+                        }
+                        const parsed = Number.parseInt(digits, 10);
+                        const clamped = Math.min(
+                          dailyLimitMax,
+                          Math.max(dailyLimitMin, parsed)
+                        );
+                        setDailyLimitInput(String(clamped));
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-14 bg-transparent text-center text-sm font-semibold text-primary focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => adjustDailyLimitInput(1)}
+                      className="h-10 w-10 rounded-full text-primary text-base font-bold"
+                      aria-label={t("daily_limit_increase", "投稿上限を1増やす")}
+                    >
+                      +
+                    </button>
+                  </div>
                   <button
                     onClick={handleSaveDailyLimit}
                     className="bg-primary text-white px-4 py-2 rounded-full font-label text-xs uppercase"

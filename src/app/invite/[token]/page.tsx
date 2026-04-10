@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { SignInButton, SignUpButton, useAuth } from "@clerk/nextjs";
+import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
 import { useUiStrings } from "../../components/useUiStrings";
@@ -10,6 +10,7 @@ import { useUiStrings } from "../../components/useUiStrings";
 export default function InvitePage() {
   const { t, tf } = useUiStrings("invite");
   const { isSignedIn } = useAuth();
+  const { user } = useUser();
   const params = useParams();
   const token = params.token as string;
   const router = useRouter();
@@ -29,7 +30,7 @@ export default function InvitePage() {
     try {
       setStatus("joining");
       setError(null);
-      await ensureProfile();
+      await ensureProfile({ imageUrl: user?.imageUrl });
       await joinInvite({ token });
       router.push("/");
     } catch (err) {

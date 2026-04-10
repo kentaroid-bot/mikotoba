@@ -1,12 +1,24 @@
 import { mutationGeneric as mutation, queryGeneric as query } from "convex/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 const INVITE_TTL_DAYS = 7;
 const DEFAULT_MAX_USES = 5;
 const MIN_MAX_USES = 1;
 const MAX_MAX_USES = 100;
+const MAX_IMAGE_URL_LENGTH = 2048;
 
 const getExpiry = () => Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+const sanitizeImageUrl = (raw: string | undefined | null) => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > MAX_IMAGE_URL_LENGTH) return undefined;
+  if (!trimmed.startsWith("https://") && !trimmed.startsWith("http://")) {
+    return undefined;
+  }
+  return trimmed;
+};
 
 export const create = mutation({
   args: { groupId: v.id("groups"), maxUses: v.optional(v.number()) },
@@ -101,6 +113,20 @@ export const join = mutation({
       await ctx.db.patch(invite._id, {
         usedCount: invite.usedCount + 1,
       });
+    }
+
+    const identityImageUrl = sanitizeImageUrl(identity.pictureUrl);
+    if (identityImageUrl) {
+      await ctx.runMutation(internal.profile.setImageForUserIdInternal, {
+        userId: identity.subject,
+        imageUrl: identityImageUrl,
+      });
+    } else {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.profile.syncSingleAvatarFromClerkForAutomation,
+        { userId: identity.subject }
+      );
     }
 
     return { groupId: invite.groupId };

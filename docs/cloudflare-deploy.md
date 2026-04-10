@@ -1,9 +1,9 @@
-# Cloudflare Deployment Runbook (musubi.ink)
+# Cloudflare Deployment Runbook (mikotoba.app)
 
 ## 1) Prerequisites
 
 - Cloudflare account and Workers enabled
-- `musubi.ink` already added to Cloudflare DNS
+- `mikotoba.app` already added to Cloudflare DNS
 - `npm install` completed
 - Convex production deployment already active:
   - `https://compassionate-penguin-753.convex.cloud`
@@ -20,6 +20,10 @@ Set these in Cloudflare Workers Build/Runtime settings (Production):
 - `CLERK_JWT_ISSUER_DOMAIN`
 - `NEXT_PUBLIC_CLERK_SIGN_IN_URL`
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL`
+
+Also ensure `.dev.vars` is set for production deploy behavior:
+
+- `NEXTJS_ENV=production`
 
 ## 3) Local verification
 
@@ -42,13 +46,13 @@ In Cloudflare Dashboard:
 
 1. Workers & Pages -> `musubi-ink` -> Settings -> Domains & Routes
 2. Add:
-   - `musubi.ink`
-   - `www.musubi.ink` (optional)
+   - `mikotoba.app`
+   - `www.mikotoba.app` (optional)
 3. Ensure DNS records are proxied (orange cloud).
 
 ## 6) Post-deploy checks
 
-- Open `https://musubi.ink/`
+- Open `https://mikotoba.app/`
 - Sign in with Clerk
 - Confirm profile and chat read/write works
 - Confirm Convex writes appear in prod tables

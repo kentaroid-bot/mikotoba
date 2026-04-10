@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useUiStrings } from "./useUiStrings";
+import LocaleToggle from "./LocaleToggle";
 
 export default function AnnouncementsClient() {
   const { isLoaded, isSignedIn } = useAuth();
+  const { user } = useUser();
   const { t, tf } = useUiStrings("announcements");
   const { isLoading: isConvexLoading, isAuthenticated: isConvexAuthenticated } =
     useConvexAuth();
@@ -30,7 +32,7 @@ export default function AnnouncementsClient() {
     activeGroup ? { groupId: activeGroup._id } : "skip"
   );
   const reportCompletion = useMutation(api.announcements.reportCompletion);
-  const closeUndated = useMutation(api.announcements.closeUndated);
+  const deleteAnnouncement = useMutation(api.announcements.closeUndated);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<
     Id<"announcements"> | ""
   >("");
@@ -46,18 +48,23 @@ export default function AnnouncementsClient() {
   const ensuringProfileRef = useRef(false);
 
   useEffect(() => {
+    if (profile === undefined) {
+      return;
+    }
+    const shouldSyncAvatar =
+      Boolean(user?.imageUrl) && profile?.imageUrl !== user?.imageUrl;
     if (
       !isLoaded ||
       !isSignedIn ||
       isConvexLoading ||
       !isConvexAuthenticated ||
-      profile !== null ||
+      (!shouldSyncAvatar && profile !== null) ||
       ensuringProfileRef.current
     ) {
       return;
     }
     ensuringProfileRef.current = true;
-    void ensureProfile()
+    void ensureProfile({ imageUrl: user?.imageUrl })
       .catch((err) => {
         if (!(err instanceof Error) || err.message !== "Unauthorized") {
           console.error(err);
@@ -72,6 +79,7 @@ export default function AnnouncementsClient() {
     isConvexLoading,
     isConvexAuthenticated,
     profile,
+    user?.imageUrl,
     ensureProfile,
   ]);
 
@@ -139,6 +147,7 @@ export default function AnnouncementsClient() {
         groupId: activeGroup._id,
         announcementId: selectedAnnouncementId,
         reportText: trimmed,
+        authorImageUrl: user?.imageUrl,
       });
       setReportText("");
       setReportSuccess(
@@ -157,24 +166,22 @@ export default function AnnouncementsClient() {
     }
   };
 
-  const handleCloseUndated = async (announcementId: Id<"announcements">) => {
+  const handleDeleteAnnouncement = async (announcementId: Id<"announcements">) => {
     if (!activeGroup || groupRole !== "admin") return;
     try {
       setClosingAnnouncementId(announcementId);
       setCloseError(null);
       setCloseSuccess(null);
-      await closeUndated({
+      await deleteAnnouncement({
         groupId: activeGroup._id,
         announcementId,
       });
-      setCloseSuccess(
-        t("close_success", "期限未設定の連絡を掲示終了しました。")
-      );
+      setCloseSuccess(t("close_success", "連絡事項を削除しました。"));
     } catch (err) {
       setCloseError(
         err instanceof Error
           ? err.message
-          : t("close_error", "掲示終了に失敗しました。")
+          : t("close_error", "削除に失敗しました。")
       );
     } finally {
       setClosingAnnouncementId(null);
@@ -188,22 +195,20 @@ export default function AnnouncementsClient() {
         <div className="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-primary/10 blur-3xl" />
       </div>
 
-      <header className="fixed top-0 left-0 w-full z-50 bg-white/70 backdrop-blur-lg shadow-sm shadow-blue-900/5">
-        <div className="flex justify-between items-center px-6 h-16 w-full max-w-5xl mx-auto">
-          <div className="flex items-center gap-2.5">
-            <span className="chat-logo-mark" aria-hidden>
-              三
-            </span>
-            <div>
-              <h1 className="text-xl font-extrabold text-primary tracking-tighter font-headline">
+      <header className="fixed top-0 left-0 w-full z-[60] bg-white/70 backdrop-blur-lg shadow-sm shadow-blue-900/5">
+        <div className="flex justify-between items-center px-4 sm:px-6 h-16 w-full max-w-[var(--app-max-w)] mx-auto gap-2">
+          <div className="flex items-center gap-2.5 min-w-0 pr-2">
+            <LocaleToggle />
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-extrabold text-primary tracking-tighter font-headline whitespace-nowrap">
                 {t("title", "みちしるべ")}
               </h1>
-              <p className="text-[11px] text-on-surface-variant">
+              <p className="hidden text-[11px] text-on-surface-variant sm:block">
                 {t("subtitle", "語り合った時間のなかから、忘れてはならない明日へ繋ぐべき種を見つけます。")}
               </p>
             </div>
           </div>
-          <div className="w-full max-w-xs">
+          <div className="w-[8.25rem] max-w-[8.25rem] shrink-0 sm:w-full sm:max-w-xs">
             <label className="sr-only" htmlFor="announcements-group-select">
               {t("select_group_sr", "チャットを選択")}
             </label>
@@ -215,7 +220,7 @@ export default function AnnouncementsClient() {
                 if (!groupId || groupId === activeGroup?._id) return;
                 void handleSwitchGroup(groupId);
               }}
-              className="w-full rounded-full bg-white/90 px-4 py-2 text-sm font-headline font-semibold text-primary shadow-sm"
+              className="w-full rounded-full bg-white/90 px-3 py-2 text-xs sm:text-sm font-headline font-semibold text-primary shadow-sm"
             >
               {groups?.length ? (
                 groups.map((group) =>
@@ -233,7 +238,7 @@ export default function AnnouncementsClient() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-6 pt-24 pb-32">
+      <main className="max-w-[var(--app-max-w)] mx-auto px-4 sm:px-6 pt-24 safe-page-bottom">
         {!hasNoAnnouncements ? (
           <section className="mb-8">
             <p className="text-on-surface-variant max-w-lg whitespace-pre-line">
@@ -311,17 +316,17 @@ export default function AnnouncementsClient() {
                     {t("importance_prefix", "重要度")}: {item.importance}
                   </span>
                 ) : null}
-                {!item.dueAt && groupRole === "admin" ? (
+                {groupRole === "admin" ? (
                   <div>
                     <button
                       type="button"
-                      onClick={() => void handleCloseUndated(item._id)}
+                      onClick={() => void handleDeleteAnnouncement(item._id)}
                       disabled={closingAnnouncementId === item._id}
                       className="rounded-full border border-primary/30 bg-white px-3 py-1 text-[10px] font-label font-bold uppercase text-primary hover:bg-primary/5 disabled:opacity-50"
                     >
                       {closingAnnouncementId === item._id
                         ? t("close_submitting", "処理中...")
-                        : t("close_button", "掲示終了")}
+                        : t("close_button", "削除")}
                     </button>
                   </div>
                 ) : null}
@@ -333,9 +338,6 @@ export default function AnnouncementsClient() {
         <section className="mt-12">
           <div className="bg-surface-container-lowest rounded-2xl p-6 shadow-sm relative overflow-hidden">
             <div className="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-primary to-primary-container opacity-20 rounded-full blur-2xl" />
-            <p className="font-label text-xs uppercase text-on-surface-variant">
-              {t("summary_badge", "Guardian Summary")}
-            </p>
             <h3 className="font-headline text-xl font-bold text-primary mt-2">
               {t("chance_title", "今日の徳ポイント獲得チャンス")}
             </h3>

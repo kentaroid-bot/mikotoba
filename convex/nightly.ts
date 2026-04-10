@@ -121,7 +121,10 @@ export const summarizeAfterHours: ReturnType<typeof internalAction> = internalAc
         }
 
         const messageLines = messages
-          .map((message) => `- ${message.authorName}(${message.authorRole}): ${message.text}`)
+          .map(
+            (message: { authorName: string; authorRole: string; text: string }) =>
+              `- ${message.authorName}(${message.authorRole}): ${message.text}`
+          )
           .join("\n");
 
         const prompt = `あなたは学級のファシリテーターAIです。以下のチャットログから、日誌の要約と重要連絡を抽出してください。

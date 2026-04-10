@@ -152,6 +152,14 @@ export const listAllForAutomation = internalQuery({
   },
 });
 
+export const listAllMemberUserIdsForAutomation = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const memberships = await ctx.db.query("memberships").collect();
+    return Array.from(new Set(memberships.map((membership) => membership.userId)));
+  },
+});
+
 export const getCreateCost = query({
   args: {},
   handler: async () => ({ cost: GROUP_CREATE_COST }),

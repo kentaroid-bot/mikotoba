@@ -17,9 +17,8 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "言の葉ガーディアン",
-  description:
-    "AIが見守る学級向けグループチャット。心理的安全性を守りながら、短い言葉でつながる。",
+  title: "みことば",
+  description: "日々の言葉や出来事を届けよう。",
 };
 
 export default function RootLayout({

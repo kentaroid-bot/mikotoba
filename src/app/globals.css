@@ -16,6 +16,10 @@
   --color-on-surface-variant: #454652;
   --color-on-primary: #ffffff;
   --color-on-secondary: #ffffff;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --nav-h: calc(5.5rem + var(--safe-bottom));
+  --composer-h: calc(5.25rem + var(--safe-bottom));
+  --app-max-w: 42rem;
 }
 
 @theme inline {
@@ -41,6 +45,11 @@
 body {
   background: var(--color-surface);
   color: var(--color-on-surface);
+  min-height: 100dvh;
+}
+
+html {
+  min-height: 100dvh;
 }
 
 .font-body {
@@ -94,4 +103,25 @@ body {
   border: 1.5px solid var(--color-primary);
   border-radius: 9999px;
   text-shadow: none;
+}
+
+.bottom-nav-shell {
+  min-height: var(--nav-h);
+  padding-bottom: calc(0.75rem + var(--safe-bottom));
+}
+
+.safe-page-bottom {
+  padding-bottom: calc(var(--nav-h) + 1.25rem);
+}
+
+.safe-chat-main {
+  padding-bottom: calc(var(--composer-h) + var(--nav-h) + 1.25rem);
+}
+
+.safe-chat-list {
+  padding-bottom: calc(var(--composer-h) + 0.75rem);
+}
+
+.chat-composer-wrap {
+  bottom: calc(var(--nav-h) + 0.5rem);
 }

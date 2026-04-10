@@ -73,6 +73,35 @@ const toDisplayGuardianId = (raw: string | undefined | null) => {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 };
 
+const toAuthorImageUrl = (raw: string | undefined | null) => {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const sanitizeAuthorImageUrl = (raw: string | undefined) => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > 2048) return undefined;
+  if (!trimmed.startsWith("https://") && !trimmed.startsWith("http://")) {
+    return undefined;
+  }
+  return trimmed;
+};
+
+const pickPrimaryProfile = <T extends { _creationTime: number; imageUrl?: string }>(
+  profiles: T[]
+) => {
+  if (profiles.length === 0) return null;
+  return [...profiles].sort((a, b) => {
+    const aHasImage = Boolean(toAuthorImageUrl(a.imageUrl));
+    const bHasImage = Boolean(toAuthorImageUrl(b.imageUrl));
+    if (aHasImage !== bHasImage) {
+      return aHasImage ? -1 : 1;
+    }
+    return b._creationTime - a._creationTime;
+  })[0];
+};
+
 const getGuardianNameForGroup = async (
   ctx: MutationCtx,
   groupId: Id<"groups">
@@ -156,14 +185,21 @@ export const list = query({
 
     const profilePairs = await Promise.all(
       authorIds.map(async (userId) => {
-        const profile = await ctx.db
+        const profiles = await ctx.db
           .query("profiles")
           .withIndex("by_user", (q) => q.eq("userId", userId))
-          .first();
-        return [userId, toDisplayGuardianId(profile?.guardianId)] as const;
+          .collect();
+        const profile = pickPrimaryProfile(profiles);
+        return [
+          userId,
+          {
+            authorName: toDisplayGuardianId(profile?.guardianId),
+            authorImageUrl: toAuthorImageUrl(profile?.imageUrl),
+          },
+        ] as const;
       })
     );
-    const authorNameByUserId = new Map(profilePairs);
+    const authorMetaByUserId = new Map(profilePairs);
     const guardianLikePairs = await Promise.all(
       docs
         .filter((doc) => doc.authorRole === "guardian")
@@ -183,12 +219,16 @@ export const list = query({
     );
     const guardianLikeByMessageId = new Map(guardianLikePairs);
 
-    return docs.map((doc) => ({
-      ...doc,
-      authorName: authorNameByUserId.get(doc.authorUserId ?? "") || doc.authorName,
-      likeCount: guardianLikeByMessageId.get(doc._id)?.likeCount ?? 0,
-      likedByMe: guardianLikeByMessageId.get(doc._id)?.likedByMe ?? false,
-    }));
+    return docs.map((doc) => {
+      const authorMeta = authorMetaByUserId.get(doc.authorUserId ?? "");
+      return {
+        ...doc,
+        authorName: authorMeta?.authorName || doc.authorName,
+        authorImageUrl: doc.authorImageUrl ?? authorMeta?.authorImageUrl,
+        likeCount: guardianLikeByMessageId.get(doc._id)?.likeCount ?? 0,
+        likedByMe: guardianLikeByMessageId.get(doc._id)?.likedByMe ?? false,
+      };
+    });
   },
 });
 
@@ -196,6 +236,7 @@ export const send = mutation({
   args: {
     groupId: v.id("groups"),
     text: v.string(),
+    authorImageUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -226,10 +267,11 @@ export const send = mutation({
       throw new Error("Not a member of this group.");
     }
 
-    const profile = await ctx.db
+    const profiles = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .first();
+      .collect();
+    const profile = pickPrimaryProfile(profiles);
     if (!profile) {
       throw new Error("Profile not found.");
     }
@@ -237,6 +279,20 @@ export const send = mutation({
       throw new Error("徳ポイントがマイナスのため投稿できません。");
     }
     const authorName = toDisplayGuardianId(profile.guardianId) || identity.name || "未設定";
+    const identityImageUrl = toAuthorImageUrl(identity.pictureUrl);
+    const profileImageUrl = toAuthorImageUrl(profile.imageUrl);
+    const clientImageUrl = sanitizeAuthorImageUrl(args.authorImageUrl);
+    const freshestImageUrl = clientImageUrl ?? identityImageUrl;
+    const authorImageUrl = freshestImageUrl ?? profileImageUrl;
+    if (freshestImageUrl && profileImageUrl !== freshestImageUrl) {
+      await Promise.all(
+        profiles.map((existingProfile) =>
+          ctx.db.patch(existingProfile._id, {
+            imageUrl: freshestImageUrl,
+          })
+        )
+      );
+    }
 
     const dailyLimit = await getDailyLimitForGroup(ctx, args.groupId);
     const today = getJstDateString(now);
@@ -264,6 +320,7 @@ export const send = mutation({
       text,
       authorName,
       authorUserId: identity.subject,
+      authorImageUrl,
       authorRole: "student",
       createdAt: now,
       expiresAt,
@@ -529,10 +586,11 @@ export const awardPoints = mutation({
       throw new Error("Not a member of this group.");
     }
 
-    const profile = await ctx.db
+    const profiles = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .first();
+      .collect();
+    const profile = pickPrimaryProfile(profiles);
     if (!profile) {
       throw new Error("Profile not found.");
     }
@@ -558,11 +616,16 @@ export const awardPoints = mutation({
         baseStats.aiFollows + (args.aiFollowed ? 1 : 0),
     };
 
-    await ctx.db.patch(profile._id, {
-      points: nextPoints,
-      weeklyStats: nextStats,
-      lastWeeklyResetDate: resetNeeded ? today : profile.lastWeeklyResetDate ?? today,
-    });
+    const nextResetDate = resetNeeded ? today : profile.lastWeeklyResetDate ?? today;
+    await Promise.all(
+      profiles.map((existingProfile) =>
+        ctx.db.patch(existingProfile._id, {
+          points: nextPoints,
+          weeklyStats: nextStats,
+          lastWeeklyResetDate: nextResetDate,
+        })
+      )
+    );
     return points;
   },
 });

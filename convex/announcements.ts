@@ -59,6 +59,35 @@ const toDisplayGuardianId = (raw: string | undefined | null) => {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 };
 
+const toAuthorImageUrl = (raw: string | undefined | null) => {
+  const trimmed = raw?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const sanitizeAuthorImageUrl = (raw: string | undefined) => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.length > 2048) return undefined;
+  if (!trimmed.startsWith("https://") && !trimmed.startsWith("http://")) {
+    return undefined;
+  }
+  return trimmed;
+};
+
+const pickPrimaryProfile = <T extends { _creationTime: number; imageUrl?: string }>(
+  profiles: T[]
+) => {
+  if (profiles.length === 0) return null;
+  return [...profiles].sort((a, b) => {
+    const aHasImage = Boolean(toAuthorImageUrl(a.imageUrl));
+    const bHasImage = Boolean(toAuthorImageUrl(b.imageUrl));
+    if (aHasImage !== bHasImage) {
+      return aHasImage ? -1 : 1;
+    }
+    return b._creationTime - a._creationTime;
+  })[0];
+};
+
 export const list = query({
   args: { groupId: v.id("groups") },
   handler: async (ctx, args) => {
@@ -110,6 +139,7 @@ export const reportCompletion = mutation({
     groupId: v.id("groups"),
     announcementId: v.id("announcements"),
     reportText: v.string(),
+    authorImageUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -143,10 +173,11 @@ export const reportCompletion = mutation({
       throw new Error("この連絡事項の完了報告はすでに投稿済みです。");
     }
 
-    const profile = await ctx.db
+    const profiles = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
-      .first();
+      .collect();
+    const profile = pickPrimaryProfile(profiles);
     if (!profile) throw new Error("Profile not found.");
     if (profile.points < 0) {
       throw new Error("徳ポイントがマイナスのため投稿できません。");
@@ -169,11 +200,26 @@ export const reportCompletion = mutation({
     const messageText = `${header}\n${reportText}`;
     const { endAt: expiresAt } = getJstDayWindow(now);
     const authorName = toDisplayGuardianId(profile.guardianId) || identity.name || "未設定";
+    const identityImageUrl = toAuthorImageUrl(identity.pictureUrl);
+    const profileImageUrl = toAuthorImageUrl(profile.imageUrl);
+    const clientImageUrl = sanitizeAuthorImageUrl(args.authorImageUrl);
+    const freshestImageUrl = clientImageUrl ?? identityImageUrl;
+    const authorImageUrl = freshestImageUrl ?? profileImageUrl;
+    if (freshestImageUrl && profileImageUrl !== freshestImageUrl) {
+      await Promise.all(
+        profiles.map((existingProfile) =>
+          ctx.db.patch(existingProfile._id, {
+            imageUrl: freshestImageUrl,
+          })
+        )
+      );
+    }
 
     const messageId = await ctx.db.insert("messages", {
       text: messageText,
       authorName,
       authorUserId: identity.subject,
+      authorImageUrl,
       authorRole: "student",
       createdAt: now,
       expiresAt,
@@ -202,11 +248,17 @@ export const reportCompletion = mutation({
       announcements: baseStats.announcements + 1,
     };
 
-    await ctx.db.patch(profile._id, {
-      points: profile.points + COMPLETION_REPORT_POINTS,
-      weeklyStats: nextStats,
-      lastWeeklyResetDate: resetNeeded ? today : profile.lastWeeklyResetDate ?? today,
-    });
+    const nextPoints = profile.points + COMPLETION_REPORT_POINTS;
+    const nextResetDate = resetNeeded ? today : profile.lastWeeklyResetDate ?? today;
+    await Promise.all(
+      profiles.map((existingProfile) =>
+        ctx.db.patch(existingProfile._id, {
+          points: nextPoints,
+          weeklyStats: nextStats,
+          lastWeeklyResetDate: nextResetDate,
+        })
+      )
+    );
 
     return {
       messageId,
@@ -230,15 +282,12 @@ export const closeUndated = mutation({
       .filter((q) => q.eq(q.field("userId"), identity.subject))
       .first();
     if (!membership || membership.role !== "admin") {
-      throw new Error("Only admins can close undated announcements.");
+      throw new Error("Only admins can delete announcements.");
     }
 
     const announcement = await ctx.db.get(args.announcementId);
     if (!announcement || announcement.groupId !== args.groupId) {
       throw new Error("Announcement not found.");
-    }
-    if (typeof announcement.dueAt === "number") {
-      throw new Error("期限がある連絡は掲示終了できません。");
     }
 
     const completions = await ctx.db
@@ -250,7 +299,7 @@ export const closeUndated = mutation({
 
     await Promise.all(completions.map((row) => ctx.db.delete(row._id)));
     await ctx.db.delete(args.announcementId);
-    return { closed: true };
+    return { deleted: true };
   },
 });
 

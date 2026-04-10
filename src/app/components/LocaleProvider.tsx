@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 
-export type AppLocale = "ja" | "en" | "zh" | "hi";
+export type AppLocale = "ja" | "en" | "zh" | "hi" | "fr";
 
 const STORAGE_KEY = "classchat:locale";
 
@@ -21,7 +21,7 @@ type LocaleContextValue = {
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 const isSupportedLocale = (value: string | null | undefined): value is AppLocale =>
-  value === "ja" || value === "en" || value === "zh" || value === "hi";
+  value === "ja" || value === "en" || value === "zh" || value === "hi" || value === "fr";
 
 export function LocaleProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<AppLocale>(() => {
