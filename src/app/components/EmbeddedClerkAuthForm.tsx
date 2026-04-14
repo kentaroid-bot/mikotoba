@@ -146,7 +146,7 @@ export default function EmbeddedClerkAuthForm({
     if (!isLoaded || !signUp) return;
     const identifier = signUpIdentifier.trim();
     if (!identifier || !signUpPassword) {
-      setError("必要項目を入力してください。");
+      setError(t("error_required_fields", "必要項目を入力してください。"));
       return;
     }
 
