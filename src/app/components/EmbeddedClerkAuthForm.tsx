@@ -204,7 +204,7 @@ export default function EmbeddedClerkAuthForm({
             }}
             className={`rounded-full px-4 py-2 text-xs font-label uppercase transition ${
               mode === "signIn"
-                ? "bg-secondary text-white"
+                ? "bg-primary text-white"
                 : "text-on-surface-variant hover:text-on-surface"
             }`}
             disabled={isBusy}
