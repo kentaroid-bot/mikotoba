@@ -66,7 +66,7 @@ export default function DiaryClient() {
       return;
     }
     ensuringProfileRef.current = true;
-    void ensureProfile({ imageUrl: user?.imageUrl })
+    void ensureProfile({ imageUrl: user?.imageUrl, username: user?.username ?? undefined })
       .catch((err) => {
         if (!(err instanceof Error) || err.message !== "Unauthorized") {
           console.error(err);
@@ -82,6 +82,7 @@ export default function DiaryClient() {
     isConvexAuthenticated,
     profile,
     user?.imageUrl,
+    user?.username,
     ensureProfile,
   ]);
 

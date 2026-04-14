@@ -1,10 +1,10 @@
 "use client";
 
-import EmbeddedClerkAuthForm from "../../components/EmbeddedClerkAuthForm";
-import LocaleToggle from "../../components/LocaleToggle";
-import { useUiStrings } from "../../components/useUiStrings";
+import EmbeddedClerkAuthForm from "../components/EmbeddedClerkAuthForm";
+import LocaleToggle from "../components/LocaleToggle";
+import { useUiStrings } from "../components/useUiStrings";
 
-export default function SignUpPage() {
+export default function SignUpAliasPage() {
   const { t } = useUiStrings("sign_in");
 
   return (

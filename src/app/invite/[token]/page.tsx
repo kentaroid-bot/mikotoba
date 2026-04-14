@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { SignInButton, SignUpButton, useAuth, useUser } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../../convex/_generated/api";
+import EmbeddedClerkAuthForm from "../../components/EmbeddedClerkAuthForm";
+import LocaleToggle from "../../components/LocaleToggle";
 import { useUiStrings } from "../../components/useUiStrings";
 
 export default function InvitePage() {
@@ -30,7 +32,10 @@ export default function InvitePage() {
     try {
       setStatus("joining");
       setError(null);
-      await ensureProfile({ imageUrl: user?.imageUrl });
+      await ensureProfile({
+        imageUrl: user?.imageUrl,
+        username: user?.username ?? undefined,
+      });
       await joinInvite({ token });
       router.push("/");
     } catch (err) {
@@ -41,6 +46,9 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen bg-surface text-on-surface flex items-center justify-center px-6">
+      <div className="fixed left-4 top-[calc(0.75rem+env(safe-area-inset-top))] z-[70]">
+        <LocaleToggle />
+      </div>
       <div className="max-w-lg w-full bg-surface-container-lowest rounded-3xl p-8 shadow-sm relative overflow-hidden">
         <div className="absolute -top-20 -right-10 w-40 h-40 rounded-full bg-tertiary-fixed-dim/20 blur-2xl" />
         <h1 className="text-2xl font-extrabold text-primary font-headline mb-2">
@@ -59,18 +67,12 @@ export default function InvitePage() {
             <p className="text-sm text-on-surface-variant">
               {t("sign_needed", "参加するにはサインインまたはサインアップしてください。")}
             </p>
-            <div className="flex gap-3">
-              <SignInButton mode="modal">
-                <button className="bg-secondary text-white px-4 py-2 rounded-full font-label text-xs uppercase">
-                  {t("sign_in", "サインイン")}
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="bg-primary text-white px-4 py-2 rounded-full font-label text-xs uppercase">
-                  {t("sign_up", "新規登録")}
-                </button>
-              </SignUpButton>
-            </div>
+            <EmbeddedClerkAuthForm
+              defaultMode="signUp"
+              signUpIdentifierMode="usernameOrEmail"
+              completeRedirectUrl={`/invite/${token}`}
+              switchStyle="tabs"
+            />
           </div>
         ) : null}
 

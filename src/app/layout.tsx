@@ -38,7 +38,7 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full flex flex-col bg-surface text-on-surface font-body">
-        <ClerkProvider signInUrl="/sign-in" signUpUrl="/sign-up">
+        <ClerkProvider signInUrl="/signin" signUpUrl="/signup">
           <ConvexClientProvider>{children}</ConvexClientProvider>
         </ClerkProvider>
       </body>

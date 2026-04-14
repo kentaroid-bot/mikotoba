@@ -129,7 +129,7 @@ export default function ProfileClient() {
       return;
     }
     ensuringProfileRef.current = true;
-    void ensureProfile({ imageUrl: user?.imageUrl })
+    void ensureProfile({ imageUrl: user?.imageUrl, username: user?.username ?? undefined })
       .catch((err) => {
         if (!(err instanceof Error) || err.message !== "Unauthorized") {
           console.error(err);
@@ -145,6 +145,7 @@ export default function ProfileClient() {
     isConvexAuthenticated,
     profile,
     user?.imageUrl,
+    user?.username,
     ensureProfile,
   ]);
 
@@ -577,7 +578,7 @@ export default function ProfileClient() {
                     if (isSigningOut) return;
                     setIsSigningOut(true);
                     try {
-                      await clerk.signOut({ redirectUrl: "/sign-in" });
+                      await clerk.signOut({ redirectUrl: "/signin" });
                     } finally {
                       setIsSigningOut(false);
                     }
@@ -674,14 +675,14 @@ export default function ProfileClient() {
             </label>
             <label className="flex flex-col gap-2 text-sm">
               <span className="text-on-surface-variant">
-                {t("edit_guardian_id_label", "Guardian ID (@id)")}
+                {t("edit_guardian_id_label", "Guardian ID")}
               </span>
               <input
                 value={guardianIdInput}
                 onChange={(event) => setGuardianIdInput(event.target.value)}
                 className="rounded-xl px-4 py-2 bg-white/80"
                 maxLength={64}
-                placeholder={t("edit_guardian_id_placeholder", "@kotonoha")}
+                placeholder={t("edit_guardian_id_placeholder", "kotonoha")}
               />
             </label>
             <label className="flex flex-col gap-2 text-sm">

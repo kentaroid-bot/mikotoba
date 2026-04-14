@@ -5,11 +5,22 @@ import {
 } from "convex/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { internalAction, internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import {
+  internalAction,
+  internalMutation,
+  type MutationCtx,
+} from "./_generated/server";
 
 const DEFAULT_DAILY_LIMIT = 3;
 const SIGNUP_INITIAL_POINTS = 300;
 const MAX_IMAGE_URL_LENGTH = 2048;
+const MAX_GUARDIAN_ID_LENGTH = 64;
+const MIN_GUARDIAN_ID_LENGTH = 3;
+const GUARDIAN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+const GENERATED_GUARDIAN_PREFIX = "user_";
+const GENERATED_GUARDIAN_SUFFIX_LENGTH = 10;
+const CLERK_SYNC_MAX_RETRIES = 4;
 
 const getJstDateString = (timestampMs: number) => {
   const offsetMs = 9 * 60 * 60 * 1000;
@@ -57,6 +68,168 @@ const fetchClerkImageUrl = async (userId: string) => {
   return sanitizeImageUrl(data.image_url);
 };
 
+const normalizeGuardianId = (raw: string) => raw.trim().replace(/^@/, "");
+
+const isGuardianIdFormatValid = (guardianId: string) => {
+  if (!guardianId) return false;
+  if (guardianId.length > MAX_GUARDIAN_ID_LENGTH) return false;
+  if (guardianId.length < MIN_GUARDIAN_ID_LENGTH) return false;
+  if (/\s/.test(guardianId)) return false;
+  return GUARDIAN_ID_PATTERN.test(guardianId);
+};
+
+const assertGuardianIdFormat = (guardianId: string) => {
+  if (!guardianId) {
+    throw new Error("Guardian IDを入力してください。");
+  }
+  if (!isGuardianIdFormatValid(guardianId)) {
+    if (guardianId.length > MAX_GUARDIAN_ID_LENGTH) {
+      throw new Error(`Guardian IDは${MAX_GUARDIAN_ID_LENGTH}文字以内で入力してください。`);
+    }
+    if (guardianId.length < MIN_GUARDIAN_ID_LENGTH) {
+      throw new Error(`Guardian IDは${MIN_GUARDIAN_ID_LENGTH}文字以上で入力してください。`);
+    }
+    if (/\s/.test(guardianId)) {
+      throw new Error("Guardian IDに空白は使用できません。");
+    }
+    throw new Error("Guardian IDは英数字・_・-のみ使用できます。");
+  }
+};
+
+const ensureGuardianIdIsUnique = async (
+  ctx: MutationCtx,
+  guardianId: string,
+  excludeProfileId?: string
+) => {
+  const existing = await ctx.db
+    .query("profiles")
+    .withIndex("by_guardian", (q) => q.eq("guardianId", guardianId))
+    .first();
+  if (existing && existing._id !== excludeProfileId) {
+    throw new Error("そのidはすでに使用されています。");
+  }
+};
+
+const toGeneratedGuardianIdCandidate = () => {
+  const random = Math.random()
+    .toString(36)
+    .replace(/[^a-z0-9]/gi, "")
+    .slice(0, GENERATED_GUARDIAN_SUFFIX_LENGTH);
+  const suffix = random.padEnd(GENERATED_GUARDIAN_SUFFIX_LENGTH, "0");
+  return `${GENERATED_GUARDIAN_PREFIX}${suffix}`;
+};
+
+const generateUniqueGuardianId = async (ctx: MutationCtx) => {
+  for (let attempt = 0; attempt < 64; attempt += 1) {
+    const candidate = toGeneratedGuardianIdCandidate();
+    const existing = await ctx.db
+      .query("profiles")
+      .withIndex("by_guardian", (q) => q.eq("guardianId", candidate))
+      .first();
+    if (!existing) return candidate;
+  }
+  throw new Error("Guardian IDの生成に失敗しました。時間をおいて再度お試しください。");
+};
+
+const parseClerkErrorMessage = (data: unknown) => {
+  if (!data || typeof data !== "object") return "";
+  const maybeErrors =
+    "errors" in data && Array.isArray((data as { errors?: unknown[] }).errors)
+      ? (data as { errors: Array<Record<string, unknown>> }).errors
+      : [];
+  for (const item of maybeErrors) {
+    const longMessage = item.long_message;
+    if (typeof longMessage === "string" && longMessage.trim()) {
+      return longMessage.trim();
+    }
+    const message = item.message;
+    if (typeof message === "string" && message.trim()) {
+      return message.trim();
+    }
+  }
+  return "";
+};
+
+class ClerkSyncError extends Error {
+  code: "config_missing" | "not_found" | "taken" | "invalid" | "external_failure";
+  status?: number;
+
+  constructor(
+    code: "config_missing" | "not_found" | "taken" | "invalid" | "external_failure",
+    message: string,
+    status?: number
+  ) {
+    super(message);
+    this.name = "ClerkSyncError";
+    this.code = code;
+    this.status = status;
+  }
+}
+
+const syncClerkUsername = async (userId: string, username: string) => {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) {
+    throw new ClerkSyncError(
+      "config_missing",
+      "サーバー設定エラー: CLERK_SECRET_KEY が未設定です。"
+    );
+  }
+
+  const response = await fetch(`https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ username }),
+  });
+
+  if (response.ok) return;
+
+  let detail = "";
+  try {
+    detail = parseClerkErrorMessage(await response.json());
+  } catch {
+    detail = "";
+  }
+  const lower = detail.toLowerCase();
+  if (response.status === 404) {
+    throw new ClerkSyncError("not_found", `No user was found with id ${userId}`, 404);
+  }
+  if (response.status === 409 || lower.includes("taken") || lower.includes("already")) {
+    throw new ClerkSyncError("taken", "そのidはすでに使用されています。", response.status);
+  }
+  if (
+    lower.includes("username") ||
+    lower.includes("invalid") ||
+    lower.includes("character") ||
+    lower.includes("length")
+  ) {
+    throw new ClerkSyncError(
+      "invalid",
+      `Guardian IDの形式が不正です。英数字・_・-の${MIN_GUARDIAN_ID_LENGTH}〜${MAX_GUARDIAN_ID_LENGTH}文字で入力してください。`
+    );
+  }
+  const detailSuffix = detail ? ` (${detail})` : "";
+  throw new ClerkSyncError(
+    "external_failure",
+    `ユーザー名の同期に失敗しました。時間をおいて再度お試しください。[status:${response.status}]${detailSuffix}`,
+    response.status
+  );
+};
+
+const enqueueClerkUsernameSync = async (
+  ctx: MutationCtx,
+  userId: string,
+  guardianId: string
+) => {
+  await ctx.scheduler.runAfter(0, internal.profile.syncClerkUsernameInternal, {
+    userId,
+    guardianId,
+    attempt: 0,
+  });
+};
+
 export const getMy = query({
   args: {},
   handler: async (ctx) => {
@@ -73,6 +246,7 @@ export const getMy = query({
 export const ensureMyProfile = mutation({
   args: {
     imageUrl: v.optional(v.string()),
+    username: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -102,11 +276,20 @@ export const ensureMyProfile = mutation({
       return existing._id;
     }
 
-    return await ctx.db.insert("profiles", {
+    const requestedGuardianId = normalizeGuardianId(args.username ?? "");
+    let guardianId = requestedGuardianId;
+    if (guardianId) {
+      assertGuardianIdFormat(guardianId);
+      await ensureGuardianIdIsUnique(ctx, guardianId);
+    } else {
+      guardianId = await generateUniqueGuardianId(ctx);
+    }
+
+    const profileId = await ctx.db.insert("profiles", {
       name: identity.name ?? "未設定",
       classLabel: "3年B組",
       number: 21,
-      guardianId: `Class-${identity.subject.slice(0, 6)}`,
+      guardianId,
       userId: identity.subject,
       email: identity.email,
       imageUrl: pictureUrl,
@@ -119,6 +302,64 @@ export const ensureMyProfile = mutation({
       motto:
         "短い言葉でも、相手を想う気持ちが伝わる。今日も一言、勇気を出してみよう。",
     });
+
+    await enqueueClerkUsernameSync(ctx, identity.subject, guardianId);
+    return profileId;
+  },
+});
+
+export const syncClerkUsernameInternal: ReturnType<typeof internalAction> = internalAction({
+  args: {
+    userId: v.string(),
+    guardianId: v.string(),
+    attempt: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const attempt = Math.max(0, Math.floor(args.attempt ?? 0));
+    try {
+      await syncClerkUsername(args.userId, args.guardianId);
+      return { synced: true, attempt };
+    } catch (error) {
+      const clerkError =
+        error instanceof ClerkSyncError
+          ? error
+          : new ClerkSyncError(
+              "external_failure",
+              error instanceof Error ? error.message : "unknown_error"
+            );
+
+      if (clerkError.code === "external_failure" && attempt < CLERK_SYNC_MAX_RETRIES) {
+        const delayMs = Math.min(60_000, 1_000 * 2 ** attempt);
+        await ctx.scheduler.runAfter(delayMs, internal.profile.syncClerkUsernameInternal, {
+          userId: args.userId,
+          guardianId: args.guardianId,
+          attempt: attempt + 1,
+        });
+        return {
+          synced: false,
+          attempt,
+          retryScheduled: true,
+          code: clerkError.code,
+          message: clerkError.message,
+        };
+      }
+
+      console.error("syncClerkUsernameInternal failed", {
+        userId: args.userId,
+        guardianId: args.guardianId,
+        attempt,
+        code: clerkError.code,
+        status: clerkError.status,
+        message: clerkError.message,
+      });
+      return {
+        synced: false,
+        attempt,
+        retryScheduled: false,
+        code: clerkError.code,
+        message: clerkError.message,
+      };
+    }
   },
 });
 
@@ -300,11 +541,8 @@ export const updateMy = mutation({
 
     const name = args.name.trim();
     const classLabel = args.classLabel.trim();
-    const guardianIdRaw = args.guardianId.trim();
+    const guardianId = normalizeGuardianId(args.guardianId);
     const motto = args.motto.trim();
-    const guardianId = guardianIdRaw.startsWith("@")
-      ? guardianIdRaw
-      : `@${guardianIdRaw}`;
 
     if (!name) throw new Error("名前を入力してください。");
     if (name.length > 40) throw new Error("名前は40文字以内で入力してください。");
@@ -313,12 +551,9 @@ export const updateMy = mutation({
     if (classLabel.length > 40)
       throw new Error("所属は40文字以内で入力してください。");
 
-    if (!guardianIdRaw) throw new Error("Guardian IDを入力してください。");
-    if (guardianId.length > 64)
-      throw new Error("Guardian IDは64文字以内で入力してください。");
-    if (/\s/.test(guardianId)) {
-      throw new Error("Guardian IDに空白は使用できません。");
-    }
+    assertGuardianIdFormat(guardianId);
+    await ensureGuardianIdIsUnique(ctx, guardianId, profile._id);
+
     if (!motto) throw new Error("メッセージを入力してください。");
     if (motto.length > 200)
       throw new Error("メッセージは200文字以内で入力してください。");
@@ -329,6 +564,10 @@ export const updateMy = mutation({
       guardianId,
       motto,
     });
+
+    if (guardianId !== profile.guardianId) {
+      await enqueueClerkUsernameSync(ctx, identity.subject, guardianId);
+    }
     return profile._id;
   },
 });
@@ -356,3 +595,210 @@ export const seed = mutation({
     });
   },
 });
+
+export const stripGuardianIdLeadingAtBatchInternal = internalMutation({
+  args: {
+    cursor: v.union(v.string(), v.null()),
+    batchSize: v.optional(v.number()),
+    syncAll: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const rawBatchSize = Math.floor(args.batchSize ?? 200);
+    const batchSize = Math.min(500, Math.max(1, rawBatchSize));
+    const page = await ctx.db.query("profiles").paginate({
+      cursor: args.cursor,
+      numItems: batchSize,
+    });
+
+    let updated = 0;
+    const syncCandidates: Array<{
+      profileId: Id<"profiles">;
+      userId: string;
+      guardianId: string;
+    }> = [];
+    for (const profile of page.page) {
+      const hasLeadingAt = profile.guardianId.startsWith("@");
+      const rawGuardianId = hasLeadingAt
+        ? profile.guardianId.slice(1)
+        : profile.guardianId;
+      let nextGuardianId = rawGuardianId;
+      const isFormatValid = isGuardianIdFormatValid(rawGuardianId);
+      const hasDuplicate = isFormatValid
+        ? (
+            await ctx.db
+              .query("profiles")
+              .withIndex("by_guardian", (q) => q.eq("guardianId", rawGuardianId))
+              .collect()
+          ).some((existing) => existing._id !== profile._id)
+        : true;
+
+      if (!isFormatValid || hasDuplicate) {
+        nextGuardianId = await generateUniqueGuardianId(ctx);
+      }
+
+      if (nextGuardianId !== profile.guardianId) {
+        await ctx.db.patch(profile._id, {
+          guardianId: nextGuardianId,
+        });
+        updated += 1;
+      }
+      if (
+        profile.userId &&
+        nextGuardianId &&
+        (nextGuardianId !== profile.guardianId || args.syncAll)
+      ) {
+        syncCandidates.push({
+          profileId: profile._id,
+          userId: profile.userId,
+          guardianId: nextGuardianId,
+        });
+      }
+    }
+
+    return {
+      scanned: page.page.length,
+      updated,
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+      syncCandidates,
+    };
+  },
+});
+
+export const forceAssignGeneratedGuardianIdInternal = internalMutation({
+  args: {
+    profileId: v.id("profiles"),
+  },
+  handler: async (ctx, args) => {
+    const profile = await ctx.db.get(args.profileId);
+    if (!profile) throw new Error("Profile not found");
+
+    const guardianId = await generateUniqueGuardianId(ctx);
+    await ctx.db.patch(args.profileId, {
+      guardianId,
+    });
+
+    return {
+      userId: profile.userId ?? null,
+      guardianId,
+    };
+  },
+});
+
+export const runGuardianIdLeadingAtCleanupInternal: ReturnType<typeof internalAction> =
+  internalAction({
+    args: {
+      batchSize: v.optional(v.number()),
+      syncAll: v.optional(v.boolean()),
+    },
+    handler: async (ctx, args) => {
+      let cursor: string | null = null;
+      let scanned = 0;
+      let updated = 0;
+      let syncedToClerk = 0;
+      let clerkSyncErrors = 0;
+      let fallbackReassigned = 0;
+      const failedSyncs: Array<{
+        userId: string;
+        guardianId: string;
+        reason: string;
+      }> = [];
+
+      while (true) {
+        const batch: {
+          scanned: number;
+          updated: number;
+          isDone: boolean;
+          continueCursor: string;
+          syncCandidates: Array<{
+            profileId: Id<"profiles">;
+            userId: string;
+            guardianId: string;
+          }>;
+        } = await ctx.runMutation(internal.profile.stripGuardianIdLeadingAtBatchInternal, {
+          cursor,
+          batchSize: args.batchSize,
+          syncAll: args.syncAll,
+        });
+
+        scanned += batch.scanned;
+        updated += batch.updated;
+
+        for (const candidate of batch.syncCandidates) {
+          try {
+            assertGuardianIdFormat(candidate.guardianId);
+            await syncClerkUsername(candidate.userId, candidate.guardianId);
+            syncedToClerk += 1;
+          } catch (error) {
+            const clerkError =
+              error instanceof ClerkSyncError
+                ? error
+                : new ClerkSyncError(
+                    "external_failure",
+                    error instanceof Error ? error.message : "unknown_error"
+                  );
+            if (clerkError.code === "not_found") {
+              clerkSyncErrors += 1;
+              if (failedSyncs.length < 20) {
+                failedSyncs.push({
+                  userId: candidate.userId,
+                  guardianId: candidate.guardianId,
+                  reason: clerkError.message,
+                });
+              }
+              continue;
+            }
+            try {
+              const fallback: {
+                userId: string | null;
+                guardianId: string;
+              } = await ctx.runMutation(internal.profile.forceAssignGeneratedGuardianIdInternal, {
+                profileId: candidate.profileId,
+              });
+
+              if (fallback.userId) {
+                await syncClerkUsername(fallback.userId, fallback.guardianId);
+                syncedToClerk += 1;
+                fallbackReassigned += 1;
+                continue;
+              }
+            } catch (fallbackError) {
+              clerkSyncErrors += 1;
+              if (failedSyncs.length < 20) {
+                failedSyncs.push({
+                  userId: candidate.userId,
+                  guardianId: candidate.guardianId,
+                  reason:
+                    fallbackError instanceof Error && fallbackError.message
+                      ? fallbackError.message
+                      : "fallback_sync_failed",
+                });
+              }
+              continue;
+            }
+
+            clerkSyncErrors += 1;
+            if (failedSyncs.length < 20) {
+              failedSyncs.push({
+                userId: candidate.userId,
+                guardianId: candidate.guardianId,
+                reason: clerkError.message,
+              });
+            }
+          }
+        }
+
+        if (batch.isDone) break;
+        cursor = batch.continueCursor;
+      }
+
+      return {
+        scanned,
+        updated,
+        syncedToClerk,
+        clerkSyncErrors,
+        fallbackReassigned,
+        failedSyncs,
+      };
+    },
+  });

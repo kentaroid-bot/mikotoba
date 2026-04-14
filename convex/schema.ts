@@ -65,6 +65,7 @@ export default defineSchema({
     email: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
     points: v.number(),
+    signupBonusGrantedAt: v.optional(v.number()),
     dailyPosts: v.number(),
     dailyLimit: v.number(),
     lastPostDate: v.optional(v.string()),

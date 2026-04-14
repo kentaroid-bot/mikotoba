@@ -1,6 +1,6 @@
 "use client";
 
-import { SignIn } from "@clerk/nextjs";
+import EmbeddedClerkAuthForm from "../../components/EmbeddedClerkAuthForm";
 import LocaleToggle from "../../components/LocaleToggle";
 import { useUiStrings } from "../../components/useUiStrings";
 
@@ -20,20 +20,11 @@ export default function SignInPage() {
         <p className="text-sm text-on-surface-variant mb-6">
           {t("subtitle", "日々の言葉や出来事を届けよう。")}
         </p>
-        <div className="flex justify-center">
-          <SignIn
-            appearance={{
-              elements: {
-                rootBox: "w-full",
-                cardBox: "w-full shadow-none",
-                card: "w-full shadow-none bg-transparent border-0",
-                headerTitle: "hidden",
-                headerSubtitle: "hidden",
-                formButtonPrimary: "bg-secondary hover:bg-secondary",
-              },
-            }}
-          />
-        </div>
+        <EmbeddedClerkAuthForm
+          defaultMode="signIn"
+          signUpIdentifierMode="emailOnly"
+          completeRedirectUrl="/"
+        />
       </div>
     </div>
   );

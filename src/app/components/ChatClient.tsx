@@ -101,6 +101,7 @@ export default function ChatClient() {
     ensuringProfileRef.current = true;
     void ensureProfile({
       imageUrl: user?.imageUrl,
+      username: user?.username ?? undefined,
     })
       .catch((err) => {
         if (!(err instanceof Error) || err.message !== "Unauthorized") {
@@ -118,6 +119,7 @@ export default function ChatClient() {
     isConvexAuthenticated,
     profile,
     user?.imageUrl,
+    user?.username,
     ensureProfile,
   ]);
 
