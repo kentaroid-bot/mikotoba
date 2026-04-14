@@ -38,13 +38,13 @@ npm run preview
 npm run deploy
 ```
 
-This uses `wrangler.jsonc` and deploys Worker `musubi-ink`.
+This uses `wrangler.jsonc` and deploys Worker `mikotoba-app`.
 
 ## 5) Custom domain attach
 
 In Cloudflare Dashboard:
 
-1. Workers & Pages -> `musubi-ink` -> Settings -> Domains & Routes
+1. Workers & Pages -> `mikotoba-app` -> Settings -> Domains & Routes
 2. Add:
    - `mikotoba.app`
    - `www.mikotoba.app` (optional)

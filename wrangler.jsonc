@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "musubi-ink",
+  "name": "mikotoba-app",
   "main": ".open-next/worker.js",
   "workers_dev": false,
   "preview_urls": true,
