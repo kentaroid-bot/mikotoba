@@ -252,6 +252,18 @@ const JA_UI_STRINGS: UiStringSeed[] = [
   { page: "profile", key: "create_group_button_prefix", locale: "ja", text: "作成（" },
   { page: "profile", key: "create_group_button_suffix", locale: "ja", text: "徳消費）" },
   { page: "profile", key: "create_group_hint", locale: "ja", text: "一定量の徳ポイントを保有していると作成できます。" },
+  {
+    page: "profile",
+    key: "create_group_email_required_hint",
+    locale: "ja",
+    text: "メールアドレスを登録すると新しいグループを作成できます。",
+  },
+  {
+    page: "profile",
+    key: "error_group_create_email_required",
+    locale: "ja",
+    text: "グループ作成にはメールアドレス登録が必要です。",
+  },
 
   { page: "invite", key: "title", locale: "ja", text: "招待リンク" },
   { page: "invite", key: "join_group_tpl", locale: "ja", text: "{groupName} に参加します。" },
@@ -458,6 +470,10 @@ const EN_OVERRIDES: Record<string, string> = {
   "profile.create_group_button_suffix": " point cost)",
   "profile.create_group_hint":
     "You can create a group when you have enough points.",
+  "profile.create_group_email_required_hint":
+    "Register an email address to create a new group.",
+  "profile.error_group_create_email_required":
+    "An email address is required to create a group.",
   "invite.title": "Invite Link",
   "invite.join_group_tpl": "Join {groupName}.",
   "invite.loading": "Loading invite info...",
@@ -572,8 +588,10 @@ const ZH_OVERRIDES: Record<string, string> = {
   "profile.create_group_button_prefix": "创造（",
   "profile.create_group_button_suffix": "美德消费）",
   "profile.create_group_hint": "如果你有一定数量的美德点，你就可以创建一个。",
+  "profile.create_group_email_required_hint": "注册电子邮箱后即可创建新的群组。",
   "profile.create_group_placeholder": "示例：3B 类聊天",
   "profile.create_group_title": "创建新组",
+  "profile.error_group_create_email_required": "创建群组需要先注册电子邮箱。",
   "profile.daily_limit_readonly_prefix": "当前上限",
   "profile.daily_limit_readonly_suffix": "次/天（只能由管理员更改）",
   "profile.daily_limit_title": "每日发帖限额",
@@ -762,8 +780,12 @@ const HI_OVERRIDES: Record<string, string> = {
   "profile.create_group_button_prefix": "बनाएं(",
   "profile.create_group_button_suffix": "पुण्य उपभोग)",
   "profile.create_group_hint": "यदि आपके पास निश्चित मात्रा में सद्गुण अंक हैं तो आप एक बना सकते हैं।",
+  "profile.create_group_email_required_hint":
+    "नया समूह बनाने के लिए ईमेल पता पंजीकृत करें।",
   "profile.create_group_placeholder": "उदाहरण: कक्षा 3बी चैट",
   "profile.create_group_title": "नया समूह बनाएं",
+  "profile.error_group_create_email_required":
+    "समूह बनाने के लिए ईमेल पता आवश्यक है।",
   "profile.daily_limit_readonly_prefix": "मौजूदा ऊपरी सीमा",
   "profile.daily_limit_readonly_suffix": "समय/दिन (केवल व्यवस्थापक द्वारा बदला जा सकता है)",
   "profile.daily_limit_title": "दैनिक पोस्टिंग सीमा",
@@ -1049,6 +1071,10 @@ const FR_OVERRIDES: Record<string, string> = {
   "profile.create_group_button_suffix": " coût en points)",
   "profile.create_group_hint":
     "Vous pouvez créer un groupe si vous avez assez de points.",
+  "profile.create_group_email_required_hint":
+    "Enregistrez une adresse e-mail pour créer un nouveau groupe.",
+  "profile.error_group_create_email_required":
+    "Une adresse e-mail est requise pour créer un groupe.",
   "profile.message_badge": "Orientation",
   "profile.weekly_badge": "Progrès",
   "invite.title": "Lien d'invitation",

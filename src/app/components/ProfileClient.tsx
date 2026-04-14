@@ -69,6 +69,7 @@ export default function ProfileClient() {
   const createInvite = useMutation(api.invites.create);
   const setDailyLimit = useMutation(api.settings.setDailyLimit);
   const createCost = useQuery(api.groups.getCreateCost);
+  const createEligibility = useQuery(api.groups.getCreateEligibility);
 
   const [nameInput, setNameInput] = useState("");
   const [guardianIdInput, setGuardianIdInput] = useState("");
@@ -232,6 +233,8 @@ export default function ProfileClient() {
   const hasManagedGroups = (managedGroups?.length ?? 0) > 0;
   const dailyLimitMin = 1;
   const dailyLimitMax = 10;
+  const isCreateLockedByEmail =
+    createEligibility !== undefined && !createEligibility.hasEmail;
 
   useEffect(() => {
     if (!activeGroupId || groupRole !== "admin") return;
@@ -327,12 +330,35 @@ export default function ProfileClient() {
 
   const handleCreateGroup = async () => {
     if (!groupName.trim()) return;
+    if (isCreateLockedByEmail) {
+      setError(
+        t(
+          "error_group_create_email_required",
+          "グループ作成にはメールアドレス登録が必要です。"
+        )
+      );
+      return;
+    }
     setError(null);
     try {
       await createGroup({ name: groupName.trim() });
       setGroupName("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("error_create", "作成に失敗しました。"));
+      if (
+        err instanceof Error &&
+        err.message === "EMAIL_REQUIRED_FOR_GROUP_CREATE"
+      ) {
+        setError(
+          t(
+            "error_group_create_email_required",
+            "グループ作成にはメールアドレス登録が必要です。"
+          )
+        );
+        return;
+      }
+      setError(
+        err instanceof Error ? err.message : t("error_create", "作成に失敗しました。")
+      );
     }
   };
 
@@ -1186,10 +1212,12 @@ export default function ProfileClient() {
                 onChange={(event) => setGroupName(event.target.value)}
                 placeholder={t("create_group_placeholder", "例: 3年B組 チャット")}
                 className="flex-1 rounded-full px-4 py-2 bg-white/80 text-sm"
+                disabled={isCreateLockedByEmail}
               />
               <button
                 onClick={handleCreateGroup}
-                className="bg-secondary text-white px-4 py-2 rounded-full font-label text-xs uppercase"
+                disabled={isCreateLockedByEmail}
+                className="bg-secondary text-white px-4 py-2 rounded-full font-label text-xs uppercase disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {t("create_group_button_prefix", "作成（")}
                 {createCost?.cost ?? 200}
@@ -1197,7 +1225,12 @@ export default function ProfileClient() {
               </button>
             </div>
             <p className="mt-2 text-xs text-on-surface-variant">
-              {t("create_group_hint", "一定量の徳ポイントを保有していると作成できます。")}
+              {isCreateLockedByEmail
+                ? t(
+                    "create_group_email_required_hint",
+                    "メールアドレスを登録すると新しいグループを作成できます。"
+                  )
+                : t("create_group_hint", "一定量の徳ポイントを保有していると作成できます。")}
             </p>
             {error && <p className="mt-3 text-sm text-secondary">{error}</p>}
           </div>

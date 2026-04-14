@@ -42,6 +42,9 @@ const toDisplayGuardianId = (raw: string | undefined | null) => {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 };
 
+const hasIdentityEmail = (email: string | null | undefined) =>
+  typeof email === "string" && email.trim().length > 0;
+
 export const getActive = query({
   args: {},
   handler: async (ctx) => {
@@ -61,6 +64,9 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthorized");
+    if (!hasIdentityEmail(identity.email)) {
+      throw new Error("EMAIL_REQUIRED_FOR_GROUP_CREATE");
+    }
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
@@ -163,6 +169,16 @@ export const listAllMemberUserIdsForAutomation = internalQuery({
 export const getCreateCost = query({
   args: {},
   handler: async () => ({ cost: GROUP_CREATE_COST }),
+});
+
+export const getCreateEligibility = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    return {
+      hasEmail: hasIdentityEmail(identity?.email),
+    };
+  },
 });
 
 export const getMyRole = query({
