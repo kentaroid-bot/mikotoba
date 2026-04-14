@@ -9,6 +9,7 @@ import type { Id } from "./_generated/dataModel";
 import {
   internalAction,
   internalMutation,
+  internalQuery,
   type MutationCtx,
 } from "./_generated/server";
 
@@ -21,6 +22,10 @@ const GUARDIAN_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const GENERATED_GUARDIAN_PREFIX = "user_";
 const GENERATED_GUARDIAN_SUFFIX_LENGTH = 10;
 const CLERK_SYNC_MAX_RETRIES = 4;
+const EMAIL_BACKFILL_DEFAULT_BATCH_SIZE = 200;
+const EMAIL_BACKFILL_MAX_BATCH_SIZE = 500;
+const EMAIL_BACKFILL_DEFAULT_MAX_PROFILES = 2000;
+const EMAIL_BACKFILL_MAX_PROFILES = 20000;
 
 const getJstDateString = (timestampMs: number) => {
   const offsetMs = 9 * 60 * 60 * 1000;
@@ -35,6 +40,12 @@ const sanitizeImageUrl = (raw: string | undefined | null) => {
   if (!trimmed.startsWith("https://") && !trimmed.startsWith("http://")) {
     return undefined;
   }
+  return trimmed;
+};
+
+const sanitizeEmail = (raw: string | undefined | null) => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
   return trimmed;
 };
 
@@ -66,6 +77,49 @@ const fetchClerkImageUrl = async (userId: string) => {
   }
   const data = (await response.json()) as { image_url?: string };
   return sanitizeImageUrl(data.image_url);
+};
+
+type ClerkUserDetails = {
+  primary_email_address_id?: string | null;
+  email_addresses?: Array<{
+    id?: string | null;
+    email_address?: string | null;
+  }>;
+};
+
+const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
+  const emails = data.email_addresses ?? [];
+  if (data.primary_email_address_id) {
+    const primary = emails.find(
+      (item) => item.id === data.primary_email_address_id
+    );
+    const primaryEmail = sanitizeEmail(primary?.email_address);
+    if (primaryEmail) return primaryEmail;
+  }
+  for (const item of emails) {
+    const next = sanitizeEmail(item.email_address);
+    if (next) return next;
+  }
+  return undefined;
+};
+
+const fetchClerkPrimaryEmail = async (userId: string) => {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return undefined;
+  const response = await fetch(
+    `https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!response.ok) {
+    return undefined;
+  }
+  const data = (await response.json()) as ClerkUserDetails;
+  return extractPrimaryEmailFromClerkUser(data);
 };
 
 const normalizeGuardianId = (raw: string) => raw.trim().replace(/^@/, "");
@@ -254,17 +308,24 @@ export const ensureMyProfile = mutation({
     const identityImageUrl = sanitizeImageUrl(identity.pictureUrl);
     const clientImageUrl = sanitizeImageUrl(args.imageUrl);
     const pictureUrl = clientImageUrl ?? identityImageUrl;
+    let identityEmail = sanitizeEmail(identity.email);
 
     const existingProfiles = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .collect();
+    const shouldResolveEmailFromClerk =
+      !identityEmail &&
+      existingProfiles.some((profile) => !sanitizeEmail(profile.email));
+    if (shouldResolveEmailFromClerk) {
+      identityEmail = await fetchClerkPrimaryEmail(identity.subject);
+    }
     if (existingProfiles.length > 0) {
       const existing = pickPrimaryProfile(existingProfiles) ?? existingProfiles[0];
       await Promise.all(
         existingProfiles.map(async (profile) => {
           const nextImage = pictureUrl ?? profile.imageUrl;
-          const nextEmail = identity.email ?? profile.email;
+          const nextEmail = identityEmail ?? profile.email;
           if (nextImage !== profile.imageUrl || nextEmail !== profile.email) {
             await ctx.db.patch(profile._id, {
               imageUrl: nextImage,
@@ -291,7 +352,7 @@ export const ensureMyProfile = mutation({
       number: 21,
       guardianId,
       userId: identity.subject,
-      email: identity.email,
+      email: identityEmail,
       imageUrl: pictureUrl,
       points: SIGNUP_INITIAL_POINTS,
       dailyPosts: 0,
@@ -307,6 +368,136 @@ export const ensureMyProfile = mutation({
     return profileId;
   },
 });
+
+export const listProfilesForEmailBackfillInternal = internalQuery({
+  args: {
+    cursor: v.union(v.string(), v.null()),
+    batchSize: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const rawBatchSize = Math.floor(args.batchSize ?? EMAIL_BACKFILL_DEFAULT_BATCH_SIZE);
+    const batchSize = Math.min(EMAIL_BACKFILL_MAX_BATCH_SIZE, Math.max(1, rawBatchSize));
+    const page = await ctx.db.query("profiles").paginate({
+      cursor: args.cursor,
+      numItems: batchSize,
+    });
+    return {
+      page: page.page.map((profile) => ({
+        _id: profile._id,
+        userId: profile.userId,
+        email: profile.email,
+      })),
+      continueCursor: page.continueCursor,
+      isDone: page.isDone,
+    };
+  },
+});
+
+export const setEmailForProfileIdInternal = internalMutation({
+  args: {
+    profileId: v.id("profiles"),
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const email = sanitizeEmail(args.email);
+    if (!email) return { updated: false };
+    const profile = await ctx.db.get(args.profileId);
+    if (!profile) return { updated: false };
+    if (sanitizeEmail(profile.email)) return { updated: false };
+    await ctx.db.patch(args.profileId, { email });
+    return { updated: true };
+  },
+});
+
+export const backfillMissingEmailsFromClerkInternal: ReturnType<typeof internalAction> =
+  internalAction({
+    args: {
+      batchSize: v.optional(v.number()),
+      maxProfiles: v.optional(v.number()),
+    },
+    handler: async (ctx, args) => {
+      const requestedMaxProfiles = Math.floor(
+        args.maxProfiles ?? EMAIL_BACKFILL_DEFAULT_MAX_PROFILES
+      );
+      const maxProfiles = Math.min(
+        EMAIL_BACKFILL_MAX_PROFILES,
+        Math.max(1, requestedMaxProfiles)
+      );
+      const rawBatchSize = Math.floor(args.batchSize ?? EMAIL_BACKFILL_DEFAULT_BATCH_SIZE);
+      const batchSize = Math.min(EMAIL_BACKFILL_MAX_BATCH_SIZE, Math.max(1, rawBatchSize));
+
+      let cursor: string | null = null;
+      let processed = 0;
+      let updated = 0;
+      let skippedHasEmail = 0;
+      let skippedMissingUserId = 0;
+      let skippedNoEmailInClerk = 0;
+      let clerkLookupFailed = 0;
+
+      while (processed < maxProfiles) {
+        const pageResult: {
+          page: Array<{ _id: Id<"profiles">; userId?: string; email?: string }>;
+          continueCursor: string;
+          isDone: boolean;
+        } = await ctx.runQuery(internal.profile.listProfilesForEmailBackfillInternal, {
+          cursor,
+          batchSize,
+        });
+
+        if (pageResult.page.length === 0) break;
+        for (const profile of pageResult.page) {
+          if (processed >= maxProfiles) break;
+          processed += 1;
+
+          if (sanitizeEmail(profile.email)) {
+            skippedHasEmail += 1;
+            continue;
+          }
+          if (!profile.userId) {
+            skippedMissingUserId += 1;
+            continue;
+          }
+
+          let emailFromClerk: string | undefined;
+          try {
+            emailFromClerk = await fetchClerkPrimaryEmail(profile.userId);
+          } catch {
+            clerkLookupFailed += 1;
+            continue;
+          }
+
+          if (!emailFromClerk) {
+            skippedNoEmailInClerk += 1;
+            continue;
+          }
+
+          const result: { updated: boolean } = await ctx.runMutation(
+            internal.profile.setEmailForProfileIdInternal,
+            {
+              profileId: profile._id,
+              email: emailFromClerk,
+            }
+          );
+          if (result.updated) {
+            updated += 1;
+          }
+        }
+
+        if (pageResult.isDone) break;
+        cursor = pageResult.continueCursor;
+      }
+
+      return {
+        processed,
+        updated,
+        skippedHasEmail,
+        skippedMissingUserId,
+        skippedNoEmailInClerk,
+        clerkLookupFailed,
+        reachedMaxProfiles: processed >= maxProfiles,
+      };
+    },
+  });
 
 export const syncClerkUsernameInternal: ReturnType<typeof internalAction> = internalAction({
   args: {

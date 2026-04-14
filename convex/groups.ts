@@ -42,8 +42,57 @@ const toDisplayGuardianId = (raw: string | undefined | null) => {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 };
 
+const sanitizeEmail = (raw: string | undefined | null) => {
+  const trimmed = raw?.trim();
+  if (!trimmed) return undefined;
+  return trimmed;
+};
+
 const hasIdentityEmail = (email: string | null | undefined) =>
-  typeof email === "string" && email.trim().length > 0;
+  Boolean(sanitizeEmail(email));
+
+type ClerkUserDetails = {
+  primary_email_address_id?: string | null;
+  email_addresses?: Array<{
+    id?: string | null;
+    email_address?: string | null;
+  }>;
+};
+
+const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
+  const emails = data.email_addresses ?? [];
+  if (data.primary_email_address_id) {
+    const primary = emails.find(
+      (item) => item.id === data.primary_email_address_id
+    );
+    const primaryEmail = sanitizeEmail(primary?.email_address);
+    if (primaryEmail) return primaryEmail;
+  }
+  for (const item of emails) {
+    const next = sanitizeEmail(item.email_address);
+    if (next) return next;
+  }
+  return undefined;
+};
+
+const fetchClerkPrimaryEmail = async (userId: string) => {
+  const secretKey = process.env.CLERK_SECRET_KEY;
+  if (!secretKey) return undefined;
+  const response = await fetch(
+    `https://api.clerk.com/v1/users/${encodeURIComponent(userId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${secretKey}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+  if (!response.ok) {
+    return undefined;
+  }
+  const data = (await response.json()) as ClerkUserDetails;
+  return extractPrimaryEmailFromClerkUser(data);
+};
 
 export const getActive = query({
   args: {},
@@ -64,14 +113,21 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Unauthorized");
-    if (!hasIdentityEmail(identity.email)) {
-      throw new Error("EMAIL_REQUIRED_FOR_GROUP_CREATE");
-    }
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .first();
     if (!profile) throw new Error("Profile not found");
+    let resolvedEmail = sanitizeEmail(profile.email) ?? sanitizeEmail(identity.email);
+    if (!resolvedEmail) {
+      resolvedEmail = await fetchClerkPrimaryEmail(identity.subject);
+    }
+    if (!resolvedEmail) {
+      throw new Error("EMAIL_REQUIRED_FOR_GROUP_CREATE");
+    }
+    if (resolvedEmail !== profile.email) {
+      await ctx.db.patch(profile._id, { email: resolvedEmail });
+    }
     if (profile.points < GROUP_CREATE_COST) {
       throw new Error("Not enough points to create a group.");
     }
@@ -175,8 +231,18 @@ export const getCreateEligibility = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { hasEmail: false };
+    }
+    const profiles = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", identity.subject))
+      .collect();
+    const hasProfileEmail = profiles.some((profile) =>
+      hasIdentityEmail(profile.email)
+    );
     return {
-      hasEmail: hasIdentityEmail(identity?.email),
+      hasEmail: hasProfileEmail || hasIdentityEmail(identity.email),
     };
   },
 });
