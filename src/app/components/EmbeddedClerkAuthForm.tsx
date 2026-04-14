@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
 import { useSignIn, useSignUp } from "@clerk/nextjs/legacy";
+import { useUiStrings } from "./useUiStrings";
 
 type AuthMode = "signIn" | "signUp";
 type SignUpIdentifierMode = "emailOnly" | "usernameOrEmail";
@@ -26,14 +27,47 @@ type ClerkApiError = {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const toErrorMessage = (error: unknown, fallback: string) => {
+const normalizeErrorMessage = (message: string) =>
+  message.trim().replace(/\s+/g, " ").toLowerCase();
+
+const localizeKnownAuthError = (
+  message: string,
+  t: (key: string, fallback: string) => string
+) => {
+  const normalized = normalizeErrorMessage(message);
+  if (normalized === "passwords must be 8 characters or more.") {
+    return t(
+      "error_password_min_length",
+      "パスワードは8文字以上で入力してください。"
+    );
+  }
+  if (normalized === "that username is taken. please try another.") {
+    return t(
+      "error_username_taken",
+      "そのユーザー名はすでに使われています。別のIDをお試しください。"
+    );
+  }
+  return message;
+};
+
+const toErrorMessage = (
+  error: unknown,
+  fallback: string,
+  t: (key: string, fallback: string) => string
+) => {
   const maybeApiError = error as ClerkApiError;
   const clerkMessage = maybeApiError?.errors?.find(
     (item) => item.longMessage || item.message
   );
-  if (clerkMessage?.longMessage) return clerkMessage.longMessage;
-  if (clerkMessage?.message) return clerkMessage.message;
-  if (error instanceof Error && error.message.trim()) return error.message;
+  if (clerkMessage?.longMessage) {
+    return localizeKnownAuthError(clerkMessage.longMessage, t);
+  }
+  if (clerkMessage?.message) {
+    return localizeKnownAuthError(clerkMessage.message, t);
+  }
+  if (error instanceof Error && error.message.trim()) {
+    return localizeKnownAuthError(error.message, t);
+  }
   return fallback;
 };
 
@@ -56,6 +90,7 @@ export default function EmbeddedClerkAuthForm({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useUiStrings("sign_in");
 
   const isLoaded = isSignInLoaded && isSignUpLoaded;
   const isSignUpEmailOnly = signUpIdentifierMode === "emailOnly";
@@ -86,7 +121,9 @@ export default function EmbeddedClerkAuthForm({
     if (!isLoaded || !signIn) return;
     const identifier = signInIdentifier.trim();
     if (!identifier || !signInPassword) {
-      setError("IDとパスワードを入力してください。");
+      setError(
+        t("error_missing_credentials", "IDとパスワードを入力してください。")
+      );
       return;
     }
 
@@ -172,7 +209,11 @@ export default function EmbeddedClerkAuthForm({
       }
     } catch (err) {
       setError(
-        toErrorMessage(err, "認証に失敗しました。入力内容を確認して再度お試しください。")
+        toErrorMessage(
+          err,
+          "認証に失敗しました。入力内容を確認して再度お試しください。",
+          t
+        )
       );
     } finally {
       setIsSubmitting(false);
@@ -186,7 +227,11 @@ export default function EmbeddedClerkAuthForm({
       await handleGoogle();
     } catch (err) {
       setError(
-        toErrorMessage(err, "Google認証に失敗しました。時間をおいて再度お試しください。")
+        toErrorMessage(
+          err,
+          "Google認証に失敗しました。時間をおいて再度お試しください。",
+          t
+        )
       );
       setIsSubmitting(false);
     }

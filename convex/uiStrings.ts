@@ -266,6 +266,19 @@ const JA_UI_STRINGS: UiStringSeed[] = [
 
   { page: "sign_in", key: "title", locale: "ja", text: "みことば" },
   { page: "sign_in", key: "subtitle", locale: "ja", text: "日々の言葉や出来事を届けよう。" },
+  { page: "sign_in", key: "error_missing_credentials", locale: "ja", text: "IDとパスワードを入力してください。" },
+  {
+    page: "sign_in",
+    key: "error_password_min_length",
+    locale: "ja",
+    text: "パスワードは8文字以上で入力してください。",
+  },
+  {
+    page: "sign_in",
+    key: "error_username_taken",
+    locale: "ja",
+    text: "そのユーザー名はすでに使われています。別のIDをお試しください。",
+  },
   { page: "sign_up", key: "title", locale: "ja", text: "みことば" },
   { page: "sign_up", key: "subtitle", locale: "ja", text: "日々の言葉や出来事を届けよう。" },
 ];
@@ -456,6 +469,9 @@ const EN_OVERRIDES: Record<string, string> = {
   "invite.error_join": "Failed to join.",
   "sign_in.title": "mikotoba",
   "sign_in.subtitle": "Share your daily words and moments.",
+  "sign_in.error_missing_credentials": "Please enter your ID and password.",
+  "sign_in.error_password_min_length": "Passwords must be 8 characters or more.",
+  "sign_in.error_username_taken": "That username is taken. Please try another.",
   "sign_up.title": "mikotoba",
   "sign_up.subtitle": "Share your daily words and moments.",
 };
@@ -641,6 +657,9 @@ const ZH_OVERRIDES: Record<string, string> = {
   "profile.weekly_positive": "积极的帖子",
   "profile.weekly_title": "本周轨迹",
   "sign_in.subtitle": "分享每天的话语与发生的事。",
+  "sign_in.error_missing_credentials": "请输入ID和密码。",
+  "sign_in.error_password_min_length": "密码必须至少为8个字符。",
+  "sign_in.error_username_taken": "该用户名已被使用。请尝试其他用户名。",
   "sign_in.title": "mikotoba",
   "sign_up.subtitle": "分享每天的话语与发生的事。",
   "sign_up.title": "mikotoba",
@@ -827,6 +846,10 @@ const HI_OVERRIDES: Record<string, string> = {
   "profile.weekly_positive": "सकारात्मक पोस्ट",
   "profile.weekly_title": "इस सप्ताह का प्रक्षेप पथ",
   "sign_in.subtitle": "अपने रोज़ के शब्द और अनुभव साझा करें।",
+  "sign_in.error_missing_credentials": "आईडी और पासवर्ड दर्ज करें।",
+  "sign_in.error_password_min_length": "पासवर्ड 8 अक्षरों या उससे अधिक का होना चाहिए।",
+  "sign_in.error_username_taken":
+    "यह उपयोगकर्ता नाम पहले से उपयोग में है। कृपया दूसरा नाम आज़माएँ।",
   "sign_in.title": "mikotoba",
   "sign_up.subtitle": "अपने रोज़ के शब्द और अनुभव साझा करें।",
   "sign_up.title": "mikotoba",
@@ -1036,6 +1059,12 @@ const FR_OVERRIDES: Record<string, string> = {
   "invite.error_join": "Échec de la participation.",
   "sign_in.title": "mikotoba",
   "sign_in.subtitle": "Partagez vos mots et vos moments du quotidien.",
+  "sign_in.error_missing_credentials":
+    "Saisissez l'identifiant et le mot de passe.",
+  "sign_in.error_password_min_length":
+    "Le mot de passe doit contenir au moins 8 caractères.",
+  "sign_in.error_username_taken":
+    "Ce nom d'utilisateur est déjà pris. Veuillez en essayer un autre.",
   "sign_up.title": "mikotoba",
   "sign_up.subtitle": "Partagez vos mots et vos moments du quotidien.",
 };
