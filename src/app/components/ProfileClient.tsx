@@ -97,6 +97,9 @@ export default function ProfileClient() {
   const syncMyEmailFromClerk = useAction(api.profile.syncMyEmailFromClerk);
   const createInvite = useMutation(api.invites.create);
   const setDailyLimit = useMutation(api.settings.setDailyLimit);
+  const setAnnouncementDefaultDueDays = useMutation(
+    api.settings.setAnnouncementDefaultDueDays
+  );
   const createCost = useQuery(api.groups.getCreateCost);
   const createEligibility = useQuery(api.groups.getCreateEligibility);
   const createEmailAddressWithReverification = useReverification(
@@ -150,6 +153,8 @@ export default function ProfileClient() {
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [inviteMaxUses, setInviteMaxUses] = useState("5");
   const [dailyLimitInput, setDailyLimitInput] = useState("");
+  const [announcementDefaultDueDaysInput, setAnnouncementDefaultDueDaysInput] =
+    useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -358,13 +363,23 @@ export default function ProfileClient() {
   const hasManagedGroups = (managedGroups?.length ?? 0) > 0;
   const dailyLimitMin = 1;
   const dailyLimitMax = 10;
+  const announcementDefaultDueDaysMin = 1;
+  const announcementDefaultDueDaysMax = 30;
   const isCreateLockedByEmail =
     createEligibility !== undefined && !createEligibility.hasEmail;
 
   useEffect(() => {
     if (!activeGroupId || groupRole !== "admin") return;
     setDailyLimitInput(String(settings?.dailyPostLimit ?? 3));
-  }, [activeGroupId, groupRole, settings?.dailyPostLimit]);
+    setAnnouncementDefaultDueDaysInput(
+      String(settings?.announcementDefaultDueDays ?? 3)
+    );
+  }, [
+    activeGroupId,
+    groupRole,
+    settings?.dailyPostLimit,
+    settings?.announcementDefaultDueDays,
+  ]);
 
   useEffect(() => {
     if (!activeGroupId || groupRole !== "admin") {
@@ -545,6 +560,46 @@ export default function ProfileClient() {
     const base = Number.isFinite(current) ? current : 3;
     const next = Math.min(dailyLimitMax, Math.max(dailyLimitMin, base + delta));
     setDailyLimitInput(String(next));
+  };
+
+  const handleSaveAnnouncementDefaultDueDays = async () => {
+    if (!activeGroup || groupRole !== "admin") return;
+    setError(null);
+    try {
+      const parsed = Number.parseInt(
+        announcementDefaultDueDaysInput ||
+          String(settings?.announcementDefaultDueDays ?? 3),
+        10
+      );
+      const safe = Number.isFinite(parsed)
+        ? Math.min(
+            announcementDefaultDueDaysMax,
+            Math.max(announcementDefaultDueDaysMin, parsed)
+          )
+        : settings?.announcementDefaultDueDays ?? 3;
+      await setAnnouncementDefaultDueDays({ announcementDefaultDueDays: safe });
+      setAnnouncementDefaultDueDaysInput(String(safe));
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : t("error_announcement_due_days_update", "連絡事項期限設定の更新に失敗しました。")
+      );
+    }
+  };
+
+  const adjustAnnouncementDefaultDueDaysInput = (delta: number) => {
+    const current = Number.parseInt(
+      announcementDefaultDueDaysInput ||
+        String(settings?.announcementDefaultDueDays ?? 3),
+      10
+    );
+    const base = Number.isFinite(current) ? current : 3;
+    const next = Math.min(
+      announcementDefaultDueDaysMax,
+      Math.max(announcementDefaultDueDaysMin, base + delta)
+    );
+    setAnnouncementDefaultDueDaysInput(String(next));
   };
 
   const handleRenameGroup = async () => {
@@ -1683,6 +1738,78 @@ export default function ProfileClient() {
                   {t("daily_limit_readonly_suffix", "回/日（変更は管理者のみ）")}
                 </p>
               )}
+            </div>
+
+            <div className="bg-surface-container-low p-4 rounded-xl">
+              <p className="font-label text-xs uppercase text-on-surface-variant">
+                {t("announcement_due_days_title", "日時なし連絡の期限日数")}
+              </p>
+              {activeGroup && groupRole === "admin" ? (
+                <div className="mt-3 flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="inline-flex items-center rounded-full bg-white/80 p-1 shadow-sm w-fit">
+                    <button
+                      type="button"
+                      onClick={() => adjustAnnouncementDefaultDueDaysInput(-1)}
+                      className="h-10 w-10 rounded-full text-primary text-base font-bold"
+                      aria-label={t(
+                        "announcement_due_days_decrease",
+                        "連絡事項期限日数を1減らす"
+                      )}
+                    >
+                      -
+                    </button>
+                    <input
+                      value={announcementDefaultDueDaysInput}
+                      onChange={(event) => {
+                        const digits = event.target.value.replace(/[^\d]/g, "");
+                        if (!digits) {
+                          setAnnouncementDefaultDueDaysInput("");
+                          return;
+                        }
+                        const parsed = Number.parseInt(digits, 10);
+                        const clamped = Math.min(
+                          announcementDefaultDueDaysMax,
+                          Math.max(announcementDefaultDueDaysMin, parsed)
+                        );
+                        setAnnouncementDefaultDueDaysInput(String(clamped));
+                      }}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      className="w-14 bg-transparent text-center text-sm font-semibold text-primary focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => adjustAnnouncementDefaultDueDaysInput(1)}
+                      className="h-10 w-10 rounded-full text-primary text-base font-bold"
+                      aria-label={t(
+                        "announcement_due_days_increase",
+                        "連絡事項期限日数を1増やす"
+                      )}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleSaveAnnouncementDefaultDueDays}
+                    className="bg-primary text-white px-4 py-2 rounded-full font-label text-xs uppercase"
+                  >
+                    {t("common_save", "保存")}
+                  </button>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-on-surface-variant">
+                  {t("announcement_due_days_readonly_prefix", "現在の設定")}:{" "}
+                  {settings?.announcementDefaultDueDays ?? 3}{" "}
+                  {t("announcement_due_days_readonly_suffix", "日後（変更は管理者のみ）")}
+                </p>
+              )}
+              <p className="mt-2 text-xs text-on-surface-variant">
+                {t(
+                  "announcement_due_days_hint",
+                  "AIが日時を抽出できない連絡事項は、この日数後の18:00（JST）を期限にします。"
+                )}
+              </p>
             </div>
 
             <div className="bg-surface-container-low p-4 rounded-xl">

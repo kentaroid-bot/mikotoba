@@ -81,6 +81,7 @@ export default defineSchema({
   settings: defineTable({
     groupId: v.optional(v.id("groups")),
     dailyPostLimit: v.number(),
+    announcementDefaultDueDays: v.optional(v.number()),
     updatedAt: v.number(),
   })
     .index("by_createdAt", ["updatedAt"])

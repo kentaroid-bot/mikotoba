@@ -7,6 +7,9 @@ const POST_START_HOUR_JST = 6;
 const SUMMARY_START_HOUR_JST = 22;
 const SILENCE_NUDGE_MINUTES = 180;
 const SILENCE_STOP_DAYS = 3;
+const DEFAULT_ANNOUNCEMENT_DEFAULT_DUE_DAYS = 3;
+const MIN_ANNOUNCEMENT_DEFAULT_DUE_DAYS = 1;
+const MAX_ANNOUNCEMENT_DEFAULT_DUE_DAYS = 30;
 
 type GeminiAnnouncement = {
   category: "持ち物" | "期限" | "伝達" | string;
@@ -45,6 +48,56 @@ const getJstHour = (timestampMs: number) =>
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
+
+const clampAnnouncementDefaultDueDays = (value: number | undefined) =>
+  clamp(
+    Number.isFinite(value) ? Math.floor(value as number) : DEFAULT_ANNOUNCEMENT_DEFAULT_DUE_DAYS,
+    MIN_ANNOUNCEMENT_DEFAULT_DUE_DAYS,
+    MAX_ANNOUNCEMENT_DEFAULT_DUE_DAYS
+  );
+
+const toJstDueAtAfterDays = (timestampMs: number, days: number) => {
+  const jst = new Date(timestampMs + JST_OFFSET_MS);
+  const year = jst.getUTCFullYear();
+  const month = jst.getUTCMonth();
+  const day = jst.getUTCDate();
+  return Date.UTC(year, month, day + days, 18, 0, 0, 0) - JST_OFFSET_MS;
+};
+
+const parseGeminiDueAtToTimestamp = (raw: string | null | undefined) => {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return undefined;
+
+  const dateTimeMatch = trimmed.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/
+  );
+  if (dateTimeMatch) {
+    const [, y, m, d, h, min] = dateTimeMatch;
+    return (
+      Date.UTC(
+        Number(y),
+        Number(m) - 1,
+        Number(d),
+        Number(h),
+        Number(min),
+        0,
+        0
+      ) - JST_OFFSET_MS
+    );
+  }
+
+  const dateOnlyMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    const [, y, m, d] = dateOnlyMatch;
+    return Date.UTC(Number(y), Number(m) - 1, Number(d), 18, 0, 0, 0) - JST_OFFSET_MS;
+  }
+
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) {
+    return parsed;
+  }
+  return undefined;
+};
 
 const getPresetStyleText = (preset: FacilitatorPreset) => {
   if (preset === "watcher") {
@@ -102,6 +155,14 @@ export const summarizeAfterHours: ReturnType<typeof internalAction> = internalAc
 
     for (const group of groups) {
       try {
+        const groupSettings: { announcementDefaultDueDays: number } =
+          await ctx.runQuery(internal.settings.getForGroupForAutomation, {
+            groupId: group._id,
+          });
+        const announcementDefaultDueDays = clampAnnouncementDefaultDueDays(
+          groupSettings.announcementDefaultDueDays
+        );
+
         const existing = await ctx.runQuery(internal.diary.byDateForAutomation, {
           groupId: group._id,
           date,
@@ -136,9 +197,9 @@ export const summarizeAfterHours: ReturnType<typeof internalAction> = internalAc
 # 第2層（運営ルール）
 - 出力は事実ベースで簡潔に
 - JSONスキーマを必ず守る
-- announcements の dueAt は、可能な限り null を避けて埋める
-- 締切時刻が不明でも日付がある場合は 18:00 を補完する
-- どうしても日時を推定できない場合のみ dueAt を null にする
+- メッセージ本文に日時が明記されている場合、announcements の dueAt はその日時を使う
+- メッセージ本文に日時がない場合、announcements の dueAt は「${announcementDefaultDueDays}日後の18:00（JST）」を使う
+- 締切時刻だけ不明で日付がある場合は 18:00（JST）を使う
 
 # グループ説明（判断の参考）
 ${group.description || "未設定"}
@@ -213,12 +274,14 @@ ${messageLines}`;
             item.category === "持ち物" || item.category === "期限" || item.category === "伝達"
               ? item.category
               : "伝達";
-          const dueAt = item.dueAt ? new Date(item.dueAt).getTime() : undefined;
+          const parsedDueAt = parseGeminiDueAtToTimestamp(item.dueAt);
+          const fallbackDueAt = toJstDueAtAfterDays(now, announcementDefaultDueDays);
+          const dueAt = parsedDueAt ?? fallbackDueAt;
           return {
             category: normalizedCategory,
             title: item.title,
             detail: item.detail,
-            dueAt: Number.isNaN(dueAt) ? undefined : dueAt,
+            dueAt: Number.isNaN(dueAt) ? fallbackDueAt : dueAt,
             importance: item.importance ?? undefined,
           };
         });
