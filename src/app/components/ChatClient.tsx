@@ -387,7 +387,15 @@ export default function ChatClient() {
                           : `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-bl-sm`
                     }
                   >
-                    <p className="text-sm leading-relaxed">{message.text}</p>
+                    <p
+                      className={
+                        isGuardian
+                          ? "text-sm leading-relaxed"
+                          : "text-[15px] md:text-sm leading-relaxed"
+                      }
+                    >
+                      {message.text}
+                    </p>
                     {isGuardian ? (
                       <div className="mt-3 flex justify-end">
                         <button
