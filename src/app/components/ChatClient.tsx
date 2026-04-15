@@ -460,7 +460,7 @@ export default function ChatClient() {
           <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-3 shadow-2xl shadow-primary/10 flex items-end gap-3">
             <div className="flex-1 relative">
               <textarea
-                className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 px-4 resize-none max-h-32 min-h-[44px]"
+                className="w-full bg-transparent border-none focus:ring-0 text-base md:text-sm py-2 px-4 resize-none max-h-32 min-h-[44px]"
                 placeholder={t("compose_placeholder", "想いを言葉にしよう...")}
                 rows={1}
                 value={text}
