@@ -377,46 +377,54 @@ export default function ChatClient() {
                     )
                   )}
                 </div>
-                <div
-                  className={
-                    isGuardian
-                      ? facilitatorToneClass
-                      : isRightAligned
-                        ? `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-br-sm`
-                        : `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-bl-sm`
-                  }
-                >
-                  <p className="text-sm leading-relaxed">{message.text}</p>
-                  {isGuardian ? (
-                    <div className="mt-3 flex justify-end">
-                      <button
-                        onClick={() => void handleToggleGuardianLike(message._id)}
-                        disabled={likePendingMessageId === message._id}
-                        className={`inline-flex items-center gap-1 rounded-full bg-white/35 px-3 py-1 text-xs font-bold ${facilitatorToneClass} disabled:opacity-50`}
-                        aria-label={t("like_aria", "AIファシリテーターの発言にハート")}
-                        title={t("like_title", "この発言を次回の口調参考にする")}
-                      >
-                        <span
-                          className="material-symbols-outlined text-sm leading-none"
-                          style={{ fontVariationSettings: "'FILL' 1" }}
+                <div className="relative">
+                  <div
+                    className={
+                      isGuardian
+                        ? facilitatorToneClass
+                        : isRightAligned
+                          ? `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-br-sm`
+                          : `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-bl-sm`
+                    }
+                  >
+                    <p className="text-sm leading-relaxed">{message.text}</p>
+                    {isGuardian ? (
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          onClick={() => void handleToggleGuardianLike(message._id)}
+                          disabled={likePendingMessageId === message._id}
+                          className={`inline-flex items-center gap-1 rounded-full bg-white/35 px-3 py-1 text-xs font-bold ${facilitatorToneClass} disabled:opacity-50`}
+                          aria-label={t("like_aria", "AIファシリテーターの発言にハート")}
+                          title={t("like_title", "この発言を次回の口調参考にする")}
                         >
-                          {message.likedByMe ? "favorite" : "favorite_border"}
-                        </span>
-                        <span>{message.likeCount ?? 0}</span>
-                      </button>
-                    </div>
-                  ) : null}
+                          <span
+                            className="material-symbols-outlined text-sm leading-none"
+                            style={{ fontVariationSettings: "'FILL' 1" }}
+                          >
+                            {message.likedByMe ? "favorite" : "favorite_border"}
+                          </span>
+                          <span>{message.likeCount ?? 0}</span>
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   {typeof message.pointsAwarded === "number" &&
                   message.pointsAwarded !== 0 ? (
-                    <div className={isRightAligned ? "mt-3 flex justify-end" : "mt-3"}>
-                      <div className="inline-flex items-center gap-1 bg-secondary px-3 py-1 rounded-full shadow-lg shadow-secondary/30">
+                    <div
+                      className={
+                        isRightAligned
+                          ? "pointer-events-none absolute -top-2 -right-5"
+                          : "pointer-events-none absolute -top-2 -left-5"
+                      }
+                    >
+                      <div className="inline-flex items-center gap-0.5 rounded-full bg-secondary px-1.5 py-0.5 shadow-md shadow-secondary/25">
                         <span
-                          className="material-symbols-outlined text-white text-xs"
+                          className="material-symbols-outlined text-[10px] leading-none text-white"
                           style={{ fontVariationSettings: "'FILL' 1" }}
                         >
                           star
                         </span>
-                        <span className="font-label text-xs font-bold text-white">
+                        <span className="font-label text-[9px] font-bold text-white">
                           {message.pointsAwarded > 0 ? "+" : ""}
                           {message.pointsAwarded}
                           {t("point_suffix", "徳")}
