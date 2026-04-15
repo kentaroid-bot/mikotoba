@@ -177,6 +177,7 @@ const JA_UI_STRINGS: UiStringSeed[] = [
   { page: "profile", key: "error_transfer_admin", locale: "ja", text: "管理権限の委譲に失敗しました。" },
   { page: "profile", key: "error_group_description_update", locale: "ja", text: "グループ説明の更新に失敗しました。" },
   { page: "profile", key: "error_ai_settings_update", locale: "ja", text: "AI設定の更新に失敗しました。" },
+  { page: "profile", key: "error_announcement_due_days_update", locale: "ja", text: "日時なし連絡の期限日数更新に失敗しました。" },
   { page: "profile", key: "error_profile_update", locale: "ja", text: "プロフィール更新に失敗しました。" },
   { page: "profile", key: "group_manage_select_title", locale: "ja", text: "管理するチャット名（プルダウン）" },
   { page: "profile", key: "group_manage_select_hint", locale: "ja", text: "管理対象のチャットを選択してください。" },
@@ -234,6 +235,12 @@ const JA_UI_STRINGS: UiStringSeed[] = [
   { page: "profile", key: "daily_limit_title", locale: "ja", text: "日次投稿上限" },
   { page: "profile", key: "daily_limit_readonly_prefix", locale: "ja", text: "現在の上限" },
   { page: "profile", key: "daily_limit_readonly_suffix", locale: "ja", text: "回/日（変更は管理者のみ）" },
+  { page: "profile", key: "announcement_due_days_title", locale: "ja", text: "日時なし連絡の期限日数" },
+  { page: "profile", key: "announcement_due_days_decrease", locale: "ja", text: "1日減らす" },
+  { page: "profile", key: "announcement_due_days_increase", locale: "ja", text: "1日増やす" },
+  { page: "profile", key: "announcement_due_days_readonly_prefix", locale: "ja", text: "現在の期限" },
+  { page: "profile", key: "announcement_due_days_readonly_suffix", locale: "ja", text: "日（変更は管理者のみ）" },
+  { page: "profile", key: "announcement_due_days_hint", locale: "ja", text: "日時が指定されていない連絡事項に対する期限日数です。" },
   { page: "profile", key: "invite_title", locale: "ja", text: "招待リンク" },
   { page: "profile", key: "invite_max_uses_label", locale: "ja", text: "利用回数" },
   { page: "profile", key: "invite_create_button", locale: "ja", text: "招待リンクを発行" },
@@ -513,6 +520,8 @@ const EN_OVERRIDES: Record<string, string> = {
   "profile.error_transfer_admin": "Failed to transfer admin role.",
   "profile.error_group_description_update": "Failed to update group description.",
   "profile.error_ai_settings_update": "Failed to update AI settings.",
+  "profile.error_announcement_due_days_update":
+    "Failed to update due days for undated announcements.",
   "profile.error_profile_update": "Failed to update profile.",
   "profile.group_manage_select_title": "Select Managed Chat (Dropdown)",
   "profile.group_manage_select_hint": "Select a managed chat target.",
@@ -555,6 +564,14 @@ const EN_OVERRIDES: Record<string, string> = {
   "profile.daily_limit_title": "Daily Post Limit",
   "profile.daily_limit_readonly_prefix": "Current limit",
   "profile.daily_limit_readonly_suffix": "posts/day (admins only)",
+  "profile.announcement_due_days_title":
+    "Due days for undated announcements",
+  "profile.announcement_due_days_decrease": "Decrease by 1 day",
+  "profile.announcement_due_days_increase": "Increase by 1 day",
+  "profile.announcement_due_days_readonly_prefix": "Current due period",
+  "profile.announcement_due_days_readonly_suffix": "days (admins only)",
+  "profile.announcement_due_days_hint":
+    "Default due period for announcements without an explicit date.",
   "profile.invite_title": "Invite Link",
   "profile.invite_max_uses_label": "Max uses",
   "profile.invite_create_button": "Create invite link",
@@ -734,6 +751,12 @@ const ZH_OVERRIDES: Record<string, string> = {
   "profile.daily_limit_readonly_prefix": "当前上限",
   "profile.daily_limit_readonly_suffix": "次/天（只能由管理员更改）",
   "profile.daily_limit_title": "每日发帖限额",
+  "profile.announcement_due_days_title": "无日期通知的期限天数",
+  "profile.announcement_due_days_decrease": "减少1天",
+  "profile.announcement_due_days_increase": "增加1天",
+  "profile.announcement_due_days_readonly_prefix": "当前期限",
+  "profile.announcement_due_days_readonly_suffix": "天（只能由管理员更改）",
+  "profile.announcement_due_days_hint": "用于未指定日期的通知事项的默认期限。",
   "profile.edit_badge": "编辑",
   "profile.edit_class_label": "联系",
   "profile.edit_guardian_id_label": "监护人 ID (@id)",
@@ -750,6 +773,7 @@ const ZH_OVERRIDES: Record<string, string> = {
   "profile.error_invite_create": "创建邀请失败。",
   "profile.error_preview": "无法生成音调样本。",
   "profile.error_profile_update": "个人资料更新失败。",
+  "profile.error_announcement_due_days_update": "无法更新无日期通知的期限天数。",
   "profile.error_transfer_admin": "管理权限委派失败。",
   "profile.facilitator_admin_only": "只有管​​理员可以更改 AI facilitator 设置。",
   "profile.facilitator_age_label": "年龄（可选）",
@@ -928,6 +952,15 @@ const HI_OVERRIDES: Record<string, string> = {
   "profile.daily_limit_readonly_prefix": "मौजूदा ऊपरी सीमा",
   "profile.daily_limit_readonly_suffix": "समय/दिन (केवल व्यवस्थापक द्वारा बदला जा सकता है)",
   "profile.daily_limit_title": "दैनिक पोस्टिंग सीमा",
+  "profile.announcement_due_days_title":
+    "बिना तारीख़ वाली घोषणाओं की समय-सीमा (दिन)",
+  "profile.announcement_due_days_decrease": "1 दिन घटाएं",
+  "profile.announcement_due_days_increase": "1 दिन बढ़ाएं",
+  "profile.announcement_due_days_readonly_prefix": "वर्तमान समय-सीमा",
+  "profile.announcement_due_days_readonly_suffix":
+    "दिन (केवल व्यवस्थापक द्वारा बदला जा सकता है)",
+  "profile.announcement_due_days_hint":
+    "जिन घोषणाओं में तारीख़ नहीं है, उनके लिए डिफ़ॉल्ट समय-सीमा.",
   "profile.edit_badge": "संपादन करना",
   "profile.edit_class_label": "संबंधन",
   "profile.edit_guardian_id_label": "अभिभावक आईडी (@id)",
@@ -944,6 +977,8 @@ const HI_OVERRIDES: Record<string, string> = {
   "profile.error_invite_create": "आमंत्रण बनाने में विफल.",
   "profile.error_preview": "टोन नमूना उत्पन्न करने में विफल.",
   "profile.error_profile_update": "प्रोफ़ाइल अद्यतन विफल रहा.",
+  "profile.error_announcement_due_days_update":
+    "बिना तारीख़ वाली घोषणाओं की समय-सीमा के दिन अपडेट नहीं हो पाए.",
   "profile.error_transfer_admin": "प्रशासनिक विशेषाधिकारों का प्रत्यायोजन विफल रहा।",
   "profile.facilitator_admin_only": "केवल प्रशासक ही एआई फैसिलिटेटर सेटिंग्स बदल सकते हैं।",
   "profile.facilitator_age_label": "आयु (वैकल्पिक)",
@@ -1138,6 +1173,8 @@ const FR_OVERRIDES: Record<string, string> = {
     "Échec de la mise à jour de la description du groupe.",
   "profile.error_ai_settings_update":
     "Échec de la mise à jour des paramètres IA.",
+  "profile.error_announcement_due_days_update":
+    "Échec de la mise à jour du délai des annonces sans date.",
   "profile.error_profile_update": "Échec de la mise à jour du profil.",
   "profile.group_manage_select_title": "Chat à gérer (menu déroulant)",
   "profile.group_manage_select_hint": "Sélectionnez le chat à administrer.",
@@ -1187,6 +1224,15 @@ const FR_OVERRIDES: Record<string, string> = {
   "profile.daily_limit_readonly_prefix": "Limite actuelle",
   "profile.daily_limit_readonly_suffix":
     "publications/jour (administrateurs uniquement)",
+  "profile.announcement_due_days_title":
+    "Délai des annonces sans date (jours)",
+  "profile.announcement_due_days_decrease": "Réduire de 1 jour",
+  "profile.announcement_due_days_increase": "Augmenter de 1 jour",
+  "profile.announcement_due_days_readonly_prefix": "Délai actuel",
+  "profile.announcement_due_days_readonly_suffix":
+    "jours (administrateurs uniquement)",
+  "profile.announcement_due_days_hint":
+    "Délai par défaut pour les annonces sans date explicite.",
   "profile.invite_title": "Lien d'invitation",
   "profile.invite_max_uses_label": "Utilisations max",
   "profile.invite_create_button": "Créer un lien d'invitation",
