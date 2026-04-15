@@ -84,8 +84,21 @@ type ClerkUserDetails = {
   email_addresses?: Array<{
     id?: string | null;
     email_address?: string | null;
+    verification?: {
+      status?: string | null;
+    } | null;
   }>;
 };
+
+const isClerkEmailVerified = (
+  email:
+    | {
+        verification?: {
+          status?: string | null;
+        } | null;
+      }
+    | undefined
+) => email?.verification?.status === "verified";
 
 const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
   const emails = data.email_addresses ?? [];
@@ -93,10 +106,14 @@ const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
     const primary = emails.find(
       (item) => item.id === data.primary_email_address_id
     );
-    const primaryEmail = sanitizeEmail(primary?.email_address);
+    if (!primary || !isClerkEmailVerified(primary)) {
+      return undefined;
+    }
+    const primaryEmail = sanitizeEmail(primary.email_address);
     if (primaryEmail) return primaryEmail;
   }
   for (const item of emails) {
+    if (!isClerkEmailVerified(item)) continue;
     const next = sanitizeEmail(item.email_address);
     if (next) return next;
   }
@@ -308,14 +325,14 @@ export const ensureMyProfile = mutation({
     const identityImageUrl = sanitizeImageUrl(identity.pictureUrl);
     const clientImageUrl = sanitizeImageUrl(args.imageUrl);
     const pictureUrl = clientImageUrl ?? identityImageUrl;
-    let identityEmail = sanitizeEmail(identity.email);
 
     const existingProfiles = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .collect();
+    let identityEmail: string | undefined;
     const shouldResolveEmailFromClerk =
-      !identityEmail &&
+      existingProfiles.length === 0 ||
       existingProfiles.some((profile) => !sanitizeEmail(profile.email));
     if (shouldResolveEmailFromClerk) {
       identityEmail = await fetchClerkPrimaryEmail(identity.subject);
@@ -366,6 +383,55 @@ export const ensureMyProfile = mutation({
 
     await enqueueClerkUsernameSync(ctx, identity.subject, guardianId);
     return profileId;
+  },
+});
+
+export const setEmailForUserIdInternal = internalMutation({
+  args: {
+    userId: v.string(),
+    email: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const normalizedEmail = sanitizeEmail(args.email ?? undefined) ?? null;
+    const profiles = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+
+    let updatedProfiles = 0;
+    for (const profile of profiles) {
+      const currentEmail = sanitizeEmail(profile.email) ?? null;
+      if (currentEmail === normalizedEmail) continue;
+      await ctx.db.patch(profile._id, { email: normalizedEmail ?? undefined });
+      updatedProfiles += 1;
+    }
+
+    return {
+      updatedProfiles,
+      profileCount: profiles.length,
+      email: normalizedEmail,
+    };
+  },
+});
+
+export const syncMyEmailFromClerk = action({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized");
+
+    const primaryVerifiedEmail = await fetchClerkPrimaryEmail(identity.subject);
+    const result: { updatedProfiles: number; profileCount: number; email: string | null } =
+      await ctx.runMutation(internal.profile.setEmailForUserIdInternal, {
+        userId: identity.subject,
+        email: primaryVerifiedEmail ?? null,
+      });
+
+    return {
+      email: result.email,
+      updatedProfiles: result.updatedProfiles,
+      profileCount: result.profileCount,
+    };
   },
 });
 

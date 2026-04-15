@@ -56,8 +56,21 @@ type ClerkUserDetails = {
   email_addresses?: Array<{
     id?: string | null;
     email_address?: string | null;
+    verification?: {
+      status?: string | null;
+    } | null;
   }>;
 };
+
+const isClerkEmailVerified = (
+  email:
+    | {
+        verification?: {
+          status?: string | null;
+        } | null;
+      }
+    | undefined
+) => email?.verification?.status === "verified";
 
 const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
   const emails = data.email_addresses ?? [];
@@ -65,10 +78,14 @@ const extractPrimaryEmailFromClerkUser = (data: ClerkUserDetails) => {
     const primary = emails.find(
       (item) => item.id === data.primary_email_address_id
     );
-    const primaryEmail = sanitizeEmail(primary?.email_address);
+    if (!primary || !isClerkEmailVerified(primary)) {
+      return undefined;
+    }
+    const primaryEmail = sanitizeEmail(primary.email_address);
     if (primaryEmail) return primaryEmail;
   }
   for (const item of emails) {
+    if (!isClerkEmailVerified(item)) continue;
     const next = sanitizeEmail(item.email_address);
     if (next) return next;
   }
@@ -118,7 +135,7 @@ export const create = mutation({
       .withIndex("by_user", (q) => q.eq("userId", identity.subject))
       .first();
     if (!profile) throw new Error("Profile not found");
-    let resolvedEmail = sanitizeEmail(profile.email) ?? sanitizeEmail(identity.email);
+    let resolvedEmail = sanitizeEmail(profile.email);
     if (!resolvedEmail) {
       resolvedEmail = await fetchClerkPrimaryEmail(identity.subject);
     }
@@ -242,7 +259,7 @@ export const getCreateEligibility = query({
       hasIdentityEmail(profile.email)
     );
     return {
-      hasEmail: hasProfileEmail || hasIdentityEmail(identity.email),
+      hasEmail: hasProfileEmail,
     };
   },
 });

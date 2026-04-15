@@ -33,11 +33,37 @@ const FACILITATOR_PRESET_OPTIONS = [
 
 type FacilitatorPreset = (typeof FACILITATOR_PRESET_OPTIONS)[number]["value"];
 
+type ClerkApiErrorLike = {
+  message?: string;
+  errors?: Array<{
+    longMessage?: string;
+    message?: string;
+  }>;
+};
+
+const getClerkErrorMessage = (error: unknown, fallback: string) => {
+  if (!error || typeof error !== "object") {
+    return fallback;
+  }
+  const clerkError = error as ClerkApiErrorLike;
+  const firstError = clerkError.errors?.[0];
+  if (typeof firstError?.longMessage === "string" && firstError.longMessage.trim()) {
+    return firstError.longMessage.trim();
+  }
+  if (typeof firstError?.message === "string" && firstError.message.trim()) {
+    return firstError.message.trim();
+  }
+  if (typeof clerkError.message === "string" && clerkError.message.trim()) {
+    return clerkError.message.trim();
+  }
+  return fallback;
+};
+
 export default function ProfileClient() {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const clerk = useClerk();
   const { user } = useUser();
-  const { t } = useUiStrings("profile");
+  const { t, tf } = useUiStrings("profile");
   const { isLoading: isConvexLoading, isAuthenticated: isConvexAuthenticated } =
     useConvexAuth();
   const profile = useQuery(api.profile.getMy);
@@ -66,6 +92,7 @@ export default function ProfileClient() {
   const setActiveGroup = useMutation(api.profile.setActiveGroup);
   const updateMyProfile = useMutation(api.profile.updateMy);
   const syncGroupAvatarsFromClerk = useAction(api.profile.syncGroupAvatarsFromClerk);
+  const syncMyEmailFromClerk = useAction(api.profile.syncMyEmailFromClerk);
   const createInvite = useMutation(api.invites.create);
   const setDailyLimit = useMutation(api.settings.setDailyLimit);
   const createCost = useQuery(api.groups.getCreateCost);
@@ -102,9 +129,17 @@ export default function ProfileClient() {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [emailInput, setEmailInput] = useState("");
+  const [emailVerificationCode, setEmailVerificationCode] = useState("");
+  const [pendingEmailAddressId, setPendingEmailAddressId] = useState<string | null>(null);
+  const [pendingEmailAddressValue, setPendingEmailAddressValue] = useState("");
+  const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [isEmailBusy, setIsEmailBusy] = useState(false);
   const ensuringProfileRef = useRef(false);
   const profileHydratedRef = useRef(false);
   const avatarSyncGroupRef = useRef<string | null>(null);
+  const emailSyncSignatureRef = useRef<string>("");
   const displayGuardianId = profile?.guardianId
     ? profile.guardianId.startsWith("@")
       ? profile.guardianId
@@ -112,6 +147,31 @@ export default function ProfileClient() {
     : "--";
   const activeGroupId = activeGroup?._id;
   const activeGroupName = activeGroup?.name ?? "";
+  const sortedEmailAddresses = useMemo(() => {
+    if (!user) return [];
+    const primaryEmailAddressId = user.primaryEmailAddressId;
+    return [...user.emailAddresses].sort((left, right) => {
+      if (left.id === primaryEmailAddressId) return -1;
+      if (right.id === primaryEmailAddressId) return 1;
+      const leftIsVerified = left.verification?.status === "verified";
+      const rightIsVerified = right.verification?.status === "verified";
+      if (leftIsVerified !== rightIsVerified) {
+        return leftIsVerified ? -1 : 1;
+      }
+      return left.emailAddress.localeCompare(right.emailAddress);
+    });
+  }, [user]);
+  const emailSyncSignature = useMemo(() => {
+    if (!user) return "";
+    const detail = [...user.emailAddresses]
+      .map(
+        (emailAddress) =>
+          `${emailAddress.id}:${emailAddress.verification?.status ?? "unknown"}`
+      )
+      .sort()
+      .join("|");
+    return `${user.id}:${user.primaryEmailAddressId ?? "none"}:${detail}`;
+  }, [user]);
 
   useEffect(() => {
     if (profile === undefined) {
@@ -217,6 +277,41 @@ export default function ProfileClient() {
       console.error(error);
     });
   }, [activeGroup?._id, groupRole, syncGroupAvatarsFromClerk]);
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn || !user || !profile) return;
+    if (!emailSyncSignature) return;
+    if (emailSyncSignatureRef.current === emailSyncSignature) return;
+    emailSyncSignatureRef.current = emailSyncSignature;
+    void syncMyEmailFromClerk({}).catch((err) => {
+      console.error(err);
+    });
+  }, [
+    emailSyncSignature,
+    isLoaded,
+    isSignedIn,
+    profile,
+    syncMyEmailFromClerk,
+    user,
+  ]);
+
+  useEffect(() => {
+    if (!pendingEmailAddressId || !user) return;
+    const pendingEmail = user.emailAddresses.find(
+      (emailAddress) => emailAddress.id === pendingEmailAddressId
+    );
+    if (!pendingEmail) {
+      setPendingEmailAddressId(null);
+      setPendingEmailAddressValue("");
+      setEmailVerificationCode("");
+      return;
+    }
+    if (pendingEmail.verification?.status === "verified") {
+      setPendingEmailAddressId(null);
+      setPendingEmailAddressValue("");
+      setEmailVerificationCode("");
+    }
+  }, [pendingEmailAddressId, user]);
 
   const inviteUrl = useMemo(() => {
     if (!inviteToken || typeof window === "undefined") return null;
@@ -522,6 +617,214 @@ export default function ProfileClient() {
     }
   };
 
+  const handleAddEmailAddress = async () => {
+    if (!user) return;
+    const nextEmail = emailInput.trim();
+    if (!nextEmail) {
+      setEmailError(
+        t("email_error_required", "メールアドレスを入力してください。")
+      );
+      return;
+    }
+
+    setIsEmailBusy(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+    try {
+      const created = await user.createEmailAddress({ email: nextEmail });
+      await created.prepareVerification({ strategy: "email_code" });
+      await user.reload();
+      setPendingEmailAddressId(created.id);
+      setPendingEmailAddressValue(created.emailAddress);
+      setEmailVerificationCode("");
+      setEmailInput("");
+      setEmailSuccess(
+        t(
+          "email_success_code_sent",
+          "確認コードを送信しました。メールを確認してください。"
+        )
+      );
+    } catch (err) {
+      setEmailError(
+        getClerkErrorMessage(
+          err,
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        )
+      );
+    } finally {
+      setIsEmailBusy(false);
+    }
+  };
+
+  const handleVerifyPendingEmail = async () => {
+    if (!user || !pendingEmailAddressId) return;
+    const code = emailVerificationCode.trim();
+    if (!code) {
+      setEmailError(
+        t("email_error_verify_code_required", "確認コードを入力してください。")
+      );
+      return;
+    }
+
+    setIsEmailBusy(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+    try {
+      const currentUser = await user.reload();
+      const targetEmailAddress = currentUser.emailAddresses.find(
+        (emailAddress) => emailAddress.id === pendingEmailAddressId
+      );
+      if (!targetEmailAddress) {
+        throw new Error(
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        );
+      }
+      await targetEmailAddress.attemptVerification({ code });
+      await user.reload();
+      await syncMyEmailFromClerk({});
+      setPendingEmailAddressId(null);
+      setPendingEmailAddressValue("");
+      setEmailVerificationCode("");
+      setEmailSuccess(
+        t("email_success_verified", "メールアドレスを確認しました。")
+      );
+    } catch (err) {
+      setEmailError(
+        getClerkErrorMessage(
+          err,
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        )
+      );
+    } finally {
+      setIsEmailBusy(false);
+    }
+  };
+
+  const handleResendEmailCode = async (emailAddressId: string) => {
+    if (!user) return;
+    setIsEmailBusy(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+    try {
+      const currentUser = await user.reload();
+      const targetEmailAddress = currentUser.emailAddresses.find(
+        (emailAddress) => emailAddress.id === emailAddressId
+      );
+      if (!targetEmailAddress) {
+        throw new Error(
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        );
+      }
+      await targetEmailAddress.prepareVerification({ strategy: "email_code" });
+      setPendingEmailAddressId(targetEmailAddress.id);
+      setPendingEmailAddressValue(targetEmailAddress.emailAddress);
+      setEmailVerificationCode("");
+      setEmailSuccess(
+        t(
+          "email_success_code_sent",
+          "確認コードを送信しました。メールを確認してください。"
+        )
+      );
+    } catch (err) {
+      setEmailError(
+        getClerkErrorMessage(
+          err,
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        )
+      );
+    } finally {
+      setIsEmailBusy(false);
+    }
+  };
+
+  const handleSetPrimaryEmailAddress = async (emailAddressId: string) => {
+    if (!user) return;
+    setIsEmailBusy(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+    try {
+      const currentUser = await user.reload();
+      const targetEmailAddress = currentUser.emailAddresses.find(
+        (emailAddress) => emailAddress.id === emailAddressId
+      );
+      if (!targetEmailAddress || targetEmailAddress.verification?.status !== "verified") {
+        throw new Error(
+          t("email_error_primary_requires_verified", "確認済みメールのみ主メールに設定できます。")
+        );
+      }
+      await currentUser.update({ primaryEmailAddressId: emailAddressId });
+      await user.reload();
+      await syncMyEmailFromClerk({});
+      setEmailSuccess(
+        t("email_success_primary_updated", "主メールアドレスを更新しました。")
+      );
+    } catch (err) {
+      setEmailError(
+        getClerkErrorMessage(
+          err,
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        )
+      );
+    } finally {
+      setIsEmailBusy(false);
+    }
+  };
+
+  const handleDeleteEmailAddress = async (emailAddressId: string) => {
+    if (!user) return;
+    const targetEmailAddress = user.emailAddresses.find(
+      (emailAddress) => emailAddress.id === emailAddressId
+    );
+    if (!targetEmailAddress) return;
+
+    const shouldDelete = window.confirm(
+      tf("email_delete_confirm_tpl", "{email} を削除しますか？", {
+        email: targetEmailAddress.emailAddress,
+      })
+    );
+    if (!shouldDelete) return;
+
+    setIsEmailBusy(true);
+    setEmailError(null);
+    setEmailSuccess(null);
+    try {
+      const currentUser = await user.reload();
+      if (currentUser.primaryEmailAddressId === emailAddressId) {
+        throw new Error(
+          t("email_error_cannot_delete_primary", "主メールアドレスは削除できません。")
+        );
+      }
+      const deletable = currentUser.emailAddresses.find(
+        (emailAddress) => emailAddress.id === emailAddressId
+      );
+      if (!deletable) {
+        throw new Error(
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        );
+      }
+      await deletable.destroy();
+      await user.reload();
+      await syncMyEmailFromClerk({});
+      if (pendingEmailAddressId === emailAddressId) {
+        setPendingEmailAddressId(null);
+        setPendingEmailAddressValue("");
+        setEmailVerificationCode("");
+      }
+      setEmailSuccess(
+        t("email_success_deleted", "メールアドレスを削除しました。")
+      );
+    } catch (err) {
+      setEmailError(
+        getClerkErrorMessage(
+          err,
+          t("email_error_action", "メールアドレス操作に失敗しました。")
+        )
+      );
+    } finally {
+      setIsEmailBusy(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-surface text-on-surface">
       <div className="fixed inset-0 -z-10">
@@ -752,6 +1055,164 @@ export default function ProfileClient() {
             )}
           </div>
           {profileError && <p className="mt-2 text-sm text-secondary">{profileError}</p>}
+        </section>
+
+        <section className="mt-8 bg-surface-container-low p-6 rounded-2xl shadow-sm">
+          <div>
+            <h3 className="font-headline text-lg font-bold text-primary">
+              {t("email_section_title", "メールアドレス管理")}
+            </h3>
+          </div>
+          <p className="mt-2 text-sm text-on-surface-variant">
+            {isCreateLockedByEmail
+              ? t(
+                  "email_section_subtitle_locked",
+                  "メールアドレスを確認すると新しいグループを作成できます。"
+                )
+              : t(
+                  "email_section_subtitle_unlocked",
+                  "主メールアドレスが確認済みのため、グループ作成機能が有効です。"
+                )}
+          </p>
+
+          <div className="mt-4 space-y-3">
+            {sortedEmailAddresses.length > 0 ? (
+              sortedEmailAddresses.map((emailAddress) => {
+                const isPrimary = user?.primaryEmailAddressId === emailAddress.id;
+                const isVerified = emailAddress.verification?.status === "verified";
+                const isPending = pendingEmailAddressId === emailAddress.id;
+                return (
+                  <div
+                    key={emailAddress.id}
+                    className="rounded-xl bg-white/80 px-4 py-3"
+                  >
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-on-surface">
+                          {emailAddress.emailAddress}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {isPrimary ? (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-label uppercase text-primary">
+                              {t("email_primary_badge", "PRIMARY")}
+                            </span>
+                          ) : null}
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-label uppercase ${
+                              isVerified
+                                ? "bg-secondary/10 text-secondary"
+                                : "bg-tertiary-fixed/20 text-on-surface-variant"
+                            }`}
+                          >
+                            {isVerified
+                              ? t("email_verified_badge", "VERIFIED")
+                              : t("email_unverified_badge", "UNVERIFIED")}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {!isPrimary && isVerified ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleSetPrimaryEmailAddress(emailAddress.id)}
+                            disabled={isEmailBusy}
+                            className="rounded-full bg-primary px-3 py-1.5 text-[10px] font-label uppercase text-white disabled:opacity-40"
+                          >
+                            {t("email_set_primary_button", "主メールにする")}
+                          </button>
+                        ) : null}
+                        {!isVerified ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleResendEmailCode(emailAddress.id)}
+                            disabled={isEmailBusy}
+                            className="rounded-full border border-primary/30 bg-white px-3 py-1.5 text-[10px] font-label uppercase text-primary disabled:opacity-40"
+                          >
+                            {t("email_resend_button", "確認コード送信")}
+                          </button>
+                        ) : null}
+                        {!isPrimary ? (
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteEmailAddress(emailAddress.id)}
+                            disabled={isEmailBusy}
+                            className="rounded-full border border-secondary/40 bg-white px-3 py-1.5 text-[10px] font-label uppercase text-secondary disabled:opacity-40"
+                          >
+                            {t("email_delete_button", "削除")}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    {isPending ? (
+                      <div className="mt-3 flex flex-col gap-2 md:flex-row">
+                        <input
+                          value={emailVerificationCode}
+                          onChange={(event) =>
+                            setEmailVerificationCode(event.target.value.replace(/\s+/g, ""))
+                          }
+                          maxLength={12}
+                          className="flex-1 rounded-xl bg-white px-4 py-2 text-sm"
+                          placeholder={t(
+                            "email_verify_code_placeholder",
+                            "確認コード（例: 123456）"
+                          )}
+                          disabled={isEmailBusy}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void handleVerifyPendingEmail()}
+                          disabled={isEmailBusy}
+                          className="rounded-full bg-secondary px-4 py-2 text-xs font-label uppercase text-white disabled:opacity-40"
+                        >
+                          {t("email_verify_button", "コード確認")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
+            ) : (
+              <p className="text-sm text-on-surface-variant">
+                {t("email_none", "登録済みメールアドレスはありません。")}
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3 md:flex-row">
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(event) => setEmailInput(event.target.value)}
+              placeholder={t("email_add_placeholder", "example@mail.com")}
+              className="flex-1 rounded-xl bg-white/80 px-4 py-2 text-sm"
+              disabled={isEmailBusy}
+            />
+            <button
+              type="button"
+              onClick={() => void handleAddEmailAddress()}
+              disabled={isEmailBusy}
+              className="rounded-full bg-primary px-4 py-2 text-xs font-label uppercase text-white disabled:opacity-40"
+            >
+              {t("email_add_button", "メールを追加")}
+            </button>
+          </div>
+
+          {pendingEmailAddressId ? (
+            <p className="mt-2 text-xs text-on-surface-variant">
+              {tf(
+                "email_pending_notice_tpl",
+                "{email} 宛に確認コードを送信済みです。",
+                { email: pendingEmailAddressValue || "--" }
+              )}
+            </p>
+          ) : null}
+          {emailSuccess ? (
+            <p className="mt-2 text-sm text-secondary">{emailSuccess}</p>
+          ) : null}
+          {emailError ? (
+            <p className="mt-2 text-sm text-secondary">{emailError}</p>
+          ) : null}
         </section>
 
         {hasManagedGroups ? (
