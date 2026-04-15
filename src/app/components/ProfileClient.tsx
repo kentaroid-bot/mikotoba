@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
-import { useAuth, useClerk, useUser } from "@clerk/nextjs";
+import { useAuth, useClerk, useReverification, useUser } from "@clerk/nextjs";
+import { isReverificationCancelledError } from "@clerk/nextjs/errors";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useUiStrings } from "./useUiStrings";
@@ -97,6 +98,23 @@ export default function ProfileClient() {
   const setDailyLimit = useMutation(api.settings.setDailyLimit);
   const createCost = useQuery(api.groups.getCreateCost);
   const createEligibility = useQuery(api.groups.getCreateEligibility);
+  const createEmailAddressWithReverification = useReverification(
+    async (email: string) => {
+      if (!user) throw new Error("Unauthorized");
+      return await user.createEmailAddress({ email });
+    }
+  );
+  const setPrimaryEmailAddressWithReverification = useReverification(
+    async (emailAddressId: string) => {
+      if (!user) throw new Error("Unauthorized");
+      return await user.update({ primaryEmailAddressId: emailAddressId });
+    }
+  );
+  const deleteEmailAddressWithReverification = useReverification(
+    async (deletable: { destroy: () => Promise<void> }) => {
+      await deletable.destroy();
+    }
+  );
 
   const [nameInput, setNameInput] = useState("");
   const [guardianIdInput, setGuardianIdInput] = useState("");
@@ -631,7 +649,7 @@ export default function ProfileClient() {
     setEmailError(null);
     setEmailSuccess(null);
     try {
-      const created = await user.createEmailAddress({ email: nextEmail });
+      const created = await createEmailAddressWithReverification(nextEmail);
       await created.prepareVerification({ strategy: "email_code" });
       await user.reload();
       setPendingEmailAddressId(created.id);
@@ -645,6 +663,15 @@ export default function ProfileClient() {
         )
       );
     } catch (err) {
+      if (isReverificationCancelledError(err)) {
+        setEmailError(
+          t(
+            "email_error_reverification_cancelled",
+            "本人確認がキャンセルされました。もう一度お試しください。"
+          )
+        );
+        return;
+      }
       setEmailError(
         getClerkErrorMessage(
           err,
@@ -752,13 +779,22 @@ export default function ProfileClient() {
           t("email_error_primary_requires_verified", "確認済みメールのみ主メールに設定できます。")
         );
       }
-      await currentUser.update({ primaryEmailAddressId: emailAddressId });
+      await setPrimaryEmailAddressWithReverification(emailAddressId);
       await user.reload();
       await syncMyEmailFromClerk({});
       setEmailSuccess(
         t("email_success_primary_updated", "主メールアドレスを更新しました。")
       );
     } catch (err) {
+      if (isReverificationCancelledError(err)) {
+        setEmailError(
+          t(
+            "email_error_reverification_cancelled",
+            "本人確認がキャンセルされました。もう一度お試しください。"
+          )
+        );
+        return;
+      }
       setEmailError(
         getClerkErrorMessage(
           err,
@@ -802,7 +838,7 @@ export default function ProfileClient() {
           t("email_error_action", "メールアドレス操作に失敗しました。")
         );
       }
-      await deletable.destroy();
+      await deleteEmailAddressWithReverification(deletable);
       await user.reload();
       await syncMyEmailFromClerk({});
       if (pendingEmailAddressId === emailAddressId) {
@@ -814,6 +850,15 @@ export default function ProfileClient() {
         t("email_success_deleted", "メールアドレスを削除しました。")
       );
     } catch (err) {
+      if (isReverificationCancelledError(err)) {
+        setEmailError(
+          t(
+            "email_error_reverification_cancelled",
+            "本人確認がキャンセルされました。もう一度お試しください。"
+          )
+        );
+        return;
+      }
       setEmailError(
         getClerkErrorMessage(
           err,
