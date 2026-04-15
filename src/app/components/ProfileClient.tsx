@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { useAction, useConvexAuth, useMutation, useQuery } from "convex/react";
 import { useAuth, useClerk, useReverification, useUser } from "@clerk/nextjs";
 import { isReverificationCancelledError } from "@clerk/nextjs/errors";
@@ -31,6 +31,7 @@ const FACILITATOR_PRESET_OPTIONS = [
     fallbackLabel: "規律型",
   },
 ] as const;
+const MAX_AVATAR_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 
 type FacilitatorPreset = (typeof FACILITATOR_PRESET_OPTIONS)[number]["value"];
 
@@ -115,6 +116,13 @@ export default function ProfileClient() {
       await deletable.destroy();
     }
   );
+  const setProfileImageWithReverification = useReverification(
+    async (file: File) => {
+      if (!user) throw new Error("Unauthorized");
+      await user.setProfileImage({ file });
+      return await user.reload();
+    }
+  );
 
   const [nameInput, setNameInput] = useState("");
   const [guardianIdInput, setGuardianIdInput] = useState("");
@@ -154,9 +162,13 @@ export default function ProfileClient() {
   const [emailSuccess, setEmailSuccess] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [isEmailBusy, setIsEmailBusy] = useState(false);
+  const [avatarSuccess, setAvatarSuccess] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [isAvatarBusy, setIsAvatarBusy] = useState(false);
   const ensuringProfileRef = useRef(false);
   const profileHydratedRef = useRef(false);
   const avatarSyncGroupRef = useRef<string | null>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement | null>(null);
   const emailSyncSignatureRef = useRef<string>("");
   const displayGuardianId = profile?.guardianId
     ? profile.guardianId.startsWith("@")
@@ -635,6 +647,59 @@ export default function ProfileClient() {
     }
   };
 
+  const handleAvatarFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !user) return;
+
+    if (!file.type.startsWith("image/")) {
+      setAvatarSuccess(null);
+      setAvatarError(
+        t("avatar_error_invalid_type", "画像ファイル（jpg/png/webp など）を選択してください。")
+      );
+      return;
+    }
+    if (file.size > MAX_AVATAR_FILE_SIZE_BYTES) {
+      setAvatarSuccess(null);
+      setAvatarError(
+        t("avatar_error_too_large", "画像サイズは5MB以下にしてください。")
+      );
+      return;
+    }
+
+    setIsAvatarBusy(true);
+    setAvatarError(null);
+    setAvatarSuccess(null);
+    try {
+      const updatedUser = await setProfileImageWithReverification(file);
+      await ensureProfile({
+        imageUrl: updatedUser.imageUrl,
+        username: updatedUser.username ?? undefined,
+      });
+      setAvatarSuccess(
+        t("avatar_success_updated", "プロフィール画像を更新しました。")
+      );
+    } catch (err) {
+      if (isReverificationCancelledError(err)) {
+        setAvatarError(
+          t(
+            "avatar_error_reverification_cancelled",
+            "本人確認がキャンセルされました。もう一度お試しください。"
+          )
+        );
+      } else {
+        setAvatarError(
+          getClerkErrorMessage(
+            err,
+            t("avatar_error_update", "プロフィール画像の更新に失敗しました。")
+          )
+        );
+      }
+    } finally {
+      setIsAvatarBusy(false);
+    }
+  };
+
   const handleAddEmailAddress = async () => {
     if (!user) return;
     const nextEmail = emailInput.trim();
@@ -959,11 +1024,38 @@ export default function ProfileClient() {
                   }}
                   className="mt-2 inline-flex rounded-full border border-primary/20 bg-white/90 px-3 py-1 text-[10px] font-headline font-semibold tracking-wide text-primary"
                   disabled={isSigningOut}
-                >
+                  >
                   {isSigningOut
                     ? t("signing_out", "サインアウト中...")
                     : t("sign_out", "サインアウト")}
                 </button>
+                <div className="mt-2">
+                  <input
+                    ref={avatarFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => {
+                      void handleAvatarFileChange(event);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="inline-flex rounded-full border border-primary/20 bg-white/90 px-3 py-1 text-[10px] font-headline font-semibold tracking-wide text-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={isAvatarBusy || !user}
+                  >
+                    {isAvatarBusy
+                      ? t("avatar_updating", "画像を更新中...")
+                      : t("avatar_change", "画像を変更")}
+                  </button>
+                  {avatarSuccess ? (
+                    <p className="mt-2 text-xs text-primary">{avatarSuccess}</p>
+                  ) : null}
+                  {avatarError ? (
+                    <p className="mt-2 text-xs text-secondary">{avatarError}</p>
+                  ) : null}
+                </div>
               </div>
             </div>
             <div className="flex-1 grid grid-cols-2 gap-4">
