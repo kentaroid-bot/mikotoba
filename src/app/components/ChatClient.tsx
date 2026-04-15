@@ -377,7 +377,7 @@ export default function ChatClient() {
                     )
                   )}
                 </div>
-                <div className="relative">
+                <div>
                   <div
                     className={
                       isGuardian
@@ -410,26 +410,15 @@ export default function ChatClient() {
                   </div>
                   {typeof message.pointsAwarded === "number" &&
                   message.pointsAwarded !== 0 ? (
-                    <div
-                      className={
-                        isRightAligned
-                          ? "pointer-events-none absolute -top-2 -right-5"
-                          : "pointer-events-none absolute -top-2 -left-5"
-                      }
-                    >
-                      <div className="inline-flex items-center gap-0.5 rounded-full bg-secondary px-1.5 py-0.5 shadow-md shadow-secondary/25">
-                        <span
-                          className="material-symbols-outlined text-[10px] leading-none text-white"
-                          style={{ fontVariationSettings: "'FILL' 1" }}
-                        >
-                          star
-                        </span>
-                        <span className="font-label text-[9px] font-bold text-white">
+                    <div className={isRightAligned ? "mt-1 flex justify-end" : "mt-1 flex justify-start"}>
+                      <span className="inline-flex items-center gap-1 font-label text-[10px] font-bold text-secondary">
+                        <span className="text-[8px] leading-none">☆</span>
+                        <span>
                           {message.pointsAwarded > 0 ? "+" : ""}
                           {message.pointsAwarded}
                           {t("point_suffix", "徳")}
                         </span>
-                      </div>
+                      </span>
                     </div>
                   ) : null}
                 </div>
