@@ -55,6 +55,7 @@ export default function ChatClient() {
   const [text, setText] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  const [isGroupMenuOpen, setIsGroupMenuOpen] = useState(false);
   const [likePendingMessageId, setLikePendingMessageId] =
     useState<Id<"messages"> | null>(null);
   const profile = useQuery(api.profile.getMy);
@@ -80,6 +81,7 @@ export default function ChatClient() {
   const setActiveGroup = useMutation(api.profile.setActiveGroup);
   const seededRef = useRef(false);
   const ensuringProfileRef = useRef(false);
+  const groupMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (profile === undefined) {
@@ -129,6 +131,29 @@ export default function ChatClient() {
       seededRef.current = true;
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (!isGroupMenuOpen) return;
+    const closeByOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (groupMenuRef.current?.contains(target)) return;
+      setIsGroupMenuOpen(false);
+    };
+    const closeByEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsGroupMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeByOutside);
+    document.addEventListener("touchstart", closeByOutside, { passive: true });
+    window.addEventListener("keydown", closeByEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeByOutside);
+      document.removeEventListener("touchstart", closeByOutside);
+      window.removeEventListener("keydown", closeByEscape);
+    };
+  }, [isGroupMenuOpen]);
 
   const remainingPosts = useMemo(() => {
     if (!dailyStatus) return "-";
@@ -259,32 +284,55 @@ export default function ChatClient() {
               </p>
             </div>
           </div>
-          <div className="w-[8.25rem] max-w-[8.25rem] shrink-0 sm:w-full sm:max-w-xs">
-            <label className="sr-only" htmlFor="chat-group-select">
-              {t("select_group_sr", "チャットを選択")}
-            </label>
-            <select
-              id="chat-group-select"
-              value={activeGroup?._id ?? ""}
-              onChange={(event) => {
-                const groupId = event.target.value as Id<"groups">;
-                if (!groupId || groupId === activeGroup?._id) return;
-                void handleSwitchGroup(groupId);
-              }}
-              className="w-full rounded-full bg-white/90 px-3 py-2 text-xs sm:text-sm font-headline font-semibold text-primary shadow-sm"
-            >
-              {groups?.length ? (
-                groups.map((group) =>
-                  group ? (
-                    <option key={group._id} value={group._id}>
-                      {group.name}
-                    </option>
-                  ) : null
-                )
-              ) : (
-                <option value="">{t("group_unjoined", "グループ未参加")}</option>
-              )}
-            </select>
+          <div className="w-[8.25rem] max-w-[8.25rem] shrink-0 sm:w-full sm:max-w-xs" ref={groupMenuRef}>
+            <div className="relative">
+              <button
+                type="button"
+                className="w-full rounded-full bg-white/90 px-3 py-2 text-xs sm:text-sm font-headline font-semibold text-primary shadow-sm text-left flex items-center justify-between"
+                aria-haspopup="listbox"
+                aria-expanded={isGroupMenuOpen}
+                aria-label={t("select_group_sr", "チャットを選択")}
+                onClick={() => setIsGroupMenuOpen((current) => !current)}
+                disabled={!groups?.length}
+              >
+                <span className="truncate">
+                  {activeGroup?.name ?? t("group_unjoined", "グループ未参加")}
+                </span>
+                <span className="material-symbols-outlined text-base leading-none">
+                  {isGroupMenuOpen ? "expand_less" : "expand_more"}
+                </span>
+              </button>
+              {isGroupMenuOpen && groups?.length ? (
+                <div
+                  className="absolute right-0 mt-2 w-full rounded-2xl border border-surface-container-high bg-white/95 p-1 shadow-lg max-h-56 overflow-y-auto z-[80]"
+                  role="listbox"
+                  aria-label={t("select_group_sr", "チャットを選択")}
+                >
+                  {groups.map((group) =>
+                    group ? (
+                      <button
+                        key={group._id}
+                        type="button"
+                        className={`w-full rounded-xl px-3 py-2 text-left text-xs sm:text-sm font-headline font-semibold transition ${
+                          group._id === activeGroup?._id
+                            ? "bg-primary/10 text-primary"
+                            : "text-on-surface hover:bg-surface-container-low"
+                        }`}
+                        role="option"
+                        aria-selected={group._id === activeGroup?._id}
+                        onClick={() => {
+                          setIsGroupMenuOpen(false);
+                          if (group._id === activeGroup?._id) return;
+                          void handleSwitchGroup(group._id);
+                        }}
+                      >
+                        {group.name}
+                      </button>
+                    ) : null
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
