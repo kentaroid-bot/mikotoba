@@ -330,105 +330,94 @@ export default function ChatClient() {
             const isGuardian = message.authorRole === "guardian";
             const isMine =
               !isGuardian && Boolean(userId) && message.authorUserId === userId;
-            const isRightAligned = isGuardian || !isMine;
+            const isSelfMessage = isMine;
             const facilitatorToneClass = getFacilitatorTextToneClass(message.createdAt);
             const messageAvatarUrl = message.authorImageUrl?.trim();
+            const displayAuthorName =
+              message.authorName.replace(/^@+/, "").trim() || message.authorName;
             const avatarFallbackInitial =
-              message.authorName
-                .replace(/^@+/, "")
-                .trim()
+              displayAuthorName
                 .slice(0, 1) || "?";
             return (
-              <div
-                key={message._id}
-                className={
-                  isRightAligned
-                    ? "flex flex-col items-end max-w-[90%] self-end"
-                    : "flex flex-col items-start max-w-[85%]"
-                }
-              >
-                <div
-                  className={
-                    isRightAligned
-                      ? "flex items-center gap-2 mb-2 mr-2"
-                      : "flex items-center gap-2 mb-2 ml-2"
-                  }
-                >
-                  <span
-                    className={
-                      isGuardian
-                        ? `font-label text-[10px] font-bold uppercase ${facilitatorToneClass}`
-                        : "font-label text-[10px] font-bold text-on-surface-variant uppercase"
-                    }
-                  >
-                    {message.authorName}
-                  </span>
-                  {!isGuardian && (
-                    messageAvatarUrl ? (
-                      <img
-                        className="w-5 h-5 rounded-full object-cover border border-surface-container-high"
-                        alt="投稿者アバター"
-                        src={messageAvatarUrl}
-                      />
+              <div key={message._id} className={`w-full flex ${isSelfMessage ? "justify-end" : "justify-start"}`}>
+                <div className="w-[75%]">
+                  {!isSelfMessage ? (
+                    isGuardian ? (
+                      <p className={`mb-2 pl-8 font-label text-[10px] font-bold uppercase ${facilitatorToneClass}`}>
+                        {displayAuthorName}
+                      </p>
                     ) : (
-                      <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-surface-container-high bg-surface-container text-[10px] font-bold text-on-surface-variant">
-                        {avatarFallbackInitial}
-                      </span>
+                      <div className="mb-2 flex items-center gap-2">
+                        {messageAvatarUrl ? (
+                          <img
+                            className="w-6 h-6 rounded-full object-cover border border-surface-container-high"
+                            alt="投稿者アバター"
+                            src={messageAvatarUrl}
+                          />
+                        ) : (
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-surface-container-high bg-surface-container text-[11px] font-bold text-on-surface-variant">
+                            {avatarFallbackInitial}
+                          </span>
+                        )}
+                        <span className="font-label text-[10px] font-bold text-on-surface-variant uppercase">
+                          {displayAuthorName}
+                        </span>
+                      </div>
                     )
-                  )}
-                </div>
-                <div>
-                  <div
-                    className={
-                      isGuardian
-                        ? facilitatorToneClass
-                        : isRightAligned
-                          ? `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-br-sm`
-                          : `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-bl-sm`
-                    }
-                  >
-                    <p
+                  ) : null}
+                  <div className={isSelfMessage ? "" : "pl-8"}>
+                    <div
                       className={
                         isGuardian
-                          ? "text-sm leading-relaxed"
-                          : "text-[15px] md:text-sm leading-relaxed"
+                          ? facilitatorToneClass
+                          : isSelfMessage
+                            ? `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-br-sm`
+                            : `${getMemberBubbleToneClass(message.createdAt)} p-4 rounded-xl rounded-bl-sm`
                       }
                     >
-                      {message.text}
-                    </p>
-                    {isGuardian ? (
-                      <div className="mt-3 flex justify-end">
-                        <button
-                          onClick={() => void handleToggleGuardianLike(message._id)}
-                          disabled={likePendingMessageId === message._id}
-                          className={`inline-flex items-center gap-1 rounded-full bg-white/35 px-3 py-1 text-xs font-bold ${facilitatorToneClass} disabled:opacity-50`}
-                          aria-label={t("like_aria", "AIファシリテーターの発言にハート")}
-                          title={t("like_title", "この発言を次回の口調参考にする")}
-                        >
-                          <span
-                            className="material-symbols-outlined text-sm leading-none"
-                            style={{ fontVariationSettings: "'FILL' 1" }}
+                      <p
+                        className={
+                          isGuardian
+                            ? "text-sm leading-relaxed"
+                            : "text-[15px] md:text-sm leading-relaxed"
+                        }
+                      >
+                        {message.text}
+                      </p>
+                      {isGuardian ? (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            onClick={() => void handleToggleGuardianLike(message._id)}
+                            disabled={likePendingMessageId === message._id}
+                            className={`inline-flex items-center gap-1 rounded-full bg-white/35 px-3 py-1 text-xs font-bold ${facilitatorToneClass} disabled:opacity-50`}
+                            aria-label={t("like_aria", "AIファシリテーターの発言にハート")}
+                            title={t("like_title", "この発言を次回の口調参考にする")}
                           >
-                            {message.likedByMe ? "favorite" : "favorite_border"}
+                            <span
+                              className="material-symbols-outlined text-sm leading-none"
+                              style={{ fontVariationSettings: "'FILL' 1" }}
+                            >
+                              {message.likedByMe ? "favorite" : "favorite_border"}
+                            </span>
+                            <span>{message.likeCount ?? 0}</span>
+                          </button>
+                        </div>
+                      ) : null}
+                    </div>
+                    {typeof message.pointsAwarded === "number" &&
+                    message.pointsAwarded !== 0 ? (
+                      <div className={isSelfMessage ? "mt-1 flex justify-end" : "mt-1 flex justify-start"}>
+                        <span className="inline-flex items-center gap-1 font-label text-[10px] font-bold text-secondary">
+                          <span className="text-[8px] leading-none">☆</span>
+                          <span>
+                            {message.pointsAwarded > 0 ? "+" : ""}
+                            {message.pointsAwarded}
+                            {t("point_suffix", "徳")}
                           </span>
-                          <span>{message.likeCount ?? 0}</span>
-                        </button>
+                        </span>
                       </div>
                     ) : null}
                   </div>
-                  {typeof message.pointsAwarded === "number" &&
-                  message.pointsAwarded !== 0 ? (
-                    <div className={isRightAligned ? "mt-1 flex justify-end" : "mt-1 flex justify-start"}>
-                      <span className="inline-flex items-center gap-1 font-label text-[10px] font-bold text-secondary">
-                        <span className="text-[8px] leading-none">☆</span>
-                        <span>
-                          {message.pointsAwarded > 0 ? "+" : ""}
-                          {message.pointsAwarded}
-                          {t("point_suffix", "徳")}
-                        </span>
-                      </span>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             );
