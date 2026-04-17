@@ -54,6 +54,7 @@ export default function ChatClient() {
     useConvexAuth();
   const [text, setText] = useState("");
   const [sendError, setSendError] = useState<string | null>(null);
+  const [isComposerFocused, setIsComposerFocused] = useState(false);
   const [likePendingMessageId, setLikePendingMessageId] =
     useState<Id<"messages"> | null>(null);
   const profile = useQuery(api.profile.getMy);
@@ -146,6 +147,7 @@ export default function ChatClient() {
   const facilitatorDisplayName =
     activeGroup?.facilitator?.displayName?.trim() ||
     t("guardian_default_name", "AIヒーロー");
+  const isComposerExpanded = isComposerFocused && Boolean(activeGroup);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -443,14 +445,26 @@ export default function ChatClient() {
         )}
 
         <div className="fixed chat-composer-wrap left-1/2 -translate-x-1/2 w-full max-w-[var(--app-max-w)] px-4 z-[50]">
-          <div className="bg-white/80 backdrop-blur-xl rounded-[2rem] p-3 shadow-2xl shadow-primary/10 flex items-end gap-3">
+          <div
+            className={`bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-2xl shadow-primary/10 flex gap-3 transition-all duration-200 ease-out ${
+              isComposerExpanded
+                ? "min-h-[34dvh] items-start p-4 md:min-h-0 md:items-end md:p-3"
+                : "items-end p-3"
+            }`}
+          >
             <div className="flex-1 relative">
               <textarea
-                className="w-full bg-transparent border-none focus:ring-0 text-base md:text-sm py-2 px-4 resize-none max-h-32 min-h-[44px]"
+                className={`w-full bg-transparent border-none focus:ring-0 text-base md:text-sm px-4 resize-none transition-[min-height,max-height,padding] duration-200 ease-out ${
+                  isComposerExpanded
+                    ? "py-3 min-h-[24dvh] max-h-[28dvh] md:py-2 md:min-h-[44px] md:max-h-32"
+                    : "py-2 min-h-[44px] max-h-32"
+                }`}
                 placeholder={t("compose_placeholder", "想いを言葉にしよう...")}
                 rows={1}
                 value={text}
                 onChange={(event) => setText(event.target.value)}
+                onFocus={() => setIsComposerFocused(true)}
+                onBlur={() => setIsComposerFocused(false)}
                 disabled={!activeGroup}
               />
               <div className="absolute right-4 bottom-2">
@@ -460,7 +474,7 @@ export default function ChatClient() {
               </div>
             </div>
             <button
-              className="bg-secondary text-white min-h-11 min-w-11 p-3 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-secondary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="self-end bg-secondary text-white min-h-11 min-w-11 p-3 rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-secondary/30 disabled:opacity-40 disabled:cursor-not-allowed"
               onClick={handleSend}
               disabled={!profile || !activeGroup || !isUserLoaded || remainingCount <= 0}
             >
