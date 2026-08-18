@@ -9,6 +9,7 @@ import { useUiStrings } from "./useUiStrings";
 
 type AuthMode = "signIn" | "signUp";
 type SignUpIdentifierMode = "emailOnly" | "usernameOrEmail";
+type AuthVerificationMode = "clientTrustEmailCode" | "mfaEmailCode";
 
 type EmbeddedClerkAuthFormProps = {
   defaultMode?: AuthMode;
@@ -87,6 +88,9 @@ export default function EmbeddedClerkAuthForm({
   const [signInPassword, setSignInPassword] = useState("");
   const [signUpIdentifier, setSignUpIdentifier] = useState("");
   const [signUpPassword, setSignUpPassword] = useState("");
+  const [verificationMode, setVerificationMode] =
+    useState<AuthVerificationMode | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +109,7 @@ export default function EmbeddedClerkAuthForm({
   const showLink = switchStyle === "link";
   const switchLinkHref = mode === "signIn" ? "/signup" : "/signin";
   const switchLinkLabel = mode === "signIn" ? "SIGN UP" : "SIGN IN";
+  const isVerifyingSignIn = mode === "signIn" && verificationMode !== null;
 
   const setSessionAndRedirect = async (sessionId: string | null) => {
     if (!sessionId) {
@@ -137,8 +142,61 @@ export default function EmbeddedClerkAuthForm({
       return;
     }
 
+    if (
+      result.status === "needs_client_trust" ||
+      result.status === "needs_second_factor"
+    ) {
+      const emailCodeFactor = result.supportedSecondFactors?.find(
+        (factor) => factor.strategy === "email_code"
+      );
+
+      if (!emailCodeFactor) {
+        throw new Error(
+          "追加認証が必要ですが、メールコード認証を開始できませんでした。Clerkの認証設定を確認してください。"
+        );
+      }
+
+      await signIn.prepareSecondFactor({
+        strategy: "email_code",
+        emailAddressId: emailCodeFactor.emailAddressId,
+      });
+      setVerificationMode(
+        result.status === "needs_client_trust"
+          ? "clientTrustEmailCode"
+          : "mfaEmailCode"
+      );
+      setVerificationCode("");
+      setError(
+        "確認コードを送信しました。メールに届いたコードを入力してください。"
+      );
+      return;
+    }
+
     throw new Error(
-      "追加認証が必要です。Googleで続行するか、別の認証方法をお試しください。"
+      "追加認証が必要です。メールコードで確認するか、別の認証方法をお試しください。"
+    );
+  };
+
+  const handleVerificationSubmit = async () => {
+    if (!isLoaded || !signIn || !verificationMode) return;
+    const code = verificationCode.trim();
+    if (!code) {
+      setError("確認コードを入力してください。");
+      return;
+    }
+
+    const result = await signIn.attemptSecondFactor({
+      strategy: "email_code",
+      code,
+    });
+
+    if (result.status === "complete") {
+      await setSessionAndRedirect(result.createdSessionId);
+      return;
+    }
+
+    throw new Error(
+      "確認が完了しませんでした。コードを確認して再度お試しください。"
     );
   };
 
@@ -174,28 +232,10 @@ export default function EmbeddedClerkAuthForm({
     }
 
     throw new Error(
-      "確認ステップが必要です。Googleで続行するか、設定を確認してください。"
+      "確認ステップが必要です。Clerkのメール確認設定を確認してください。"
     );
   };
 
-  const handleGoogle = async () => {
-    if (!isLoaded) return;
-    if (mode === "signIn" && signIn) {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: completeRedirectUrl,
-      });
-      return;
-    }
-    if (mode === "signUp" && signUp) {
-      await signUp.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: completeRedirectUrl,
-      });
-    }
-  };
 
   const handlePrimarySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -203,7 +243,11 @@ export default function EmbeddedClerkAuthForm({
     setIsSubmitting(true);
     try {
       if (mode === "signIn") {
-        await handlePasswordSignIn();
+        if (verificationMode) {
+          await handleVerificationSubmit();
+        } else {
+          await handlePasswordSignIn();
+        }
       } else {
         await handlePasswordSignUp();
       }
@@ -220,22 +264,6 @@ export default function EmbeddedClerkAuthForm({
     }
   };
 
-  const handleGoogleSubmit = async () => {
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      await handleGoogle();
-    } catch (err) {
-      setError(
-        toErrorMessage(
-          err,
-          "Google認証に失敗しました。時間をおいて再度お試しください。",
-          t
-        )
-      );
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className={className}>
@@ -245,6 +273,8 @@ export default function EmbeddedClerkAuthForm({
             type="button"
             onClick={() => {
               setMode("signIn");
+              setVerificationMode(null);
+              setVerificationCode("");
               setError(null);
             }}
             className={`rounded-full px-4 py-2 text-xs font-label uppercase transition ${
@@ -260,6 +290,8 @@ export default function EmbeddedClerkAuthForm({
             type="button"
             onClick={() => {
               setMode("signUp");
+              setVerificationMode(null);
+              setVerificationCode("");
               setError(null);
             }}
             className={`rounded-full px-4 py-2 text-xs font-label uppercase transition ${
@@ -275,7 +307,35 @@ export default function EmbeddedClerkAuthForm({
       ) : null}
 
       <form onSubmit={handlePrimarySubmit} className="space-y-3">
-        {mode === "signIn" ? (
+        {isVerifyingSignIn ? (
+          <>
+            <label className="block text-xs text-on-surface-variant">
+              Verification code
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={verificationCode}
+                onChange={(event) => setVerificationCode(event.target.value)}
+                className="mt-1 w-full rounded-xl bg-white/80 px-4 py-2 text-sm text-on-surface outline-none ring-1 ring-black/5 focus:ring-2 focus:ring-primary/40"
+                placeholder="123456"
+                disabled={isBusy}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                setVerificationMode(null);
+                setVerificationCode("");
+                setError(null);
+              }}
+              className="text-xs font-label uppercase text-primary underline underline-offset-4 hover:opacity-80"
+              disabled={isBusy}
+            >
+              Change ID
+            </button>
+          </>
+        ) : mode === "signIn" ? (
           <>
             <label className="block text-xs text-on-surface-variant">
               Username (or E-mail)
@@ -338,22 +398,14 @@ export default function EmbeddedClerkAuthForm({
           disabled={isBusy}
           className="w-full rounded-full bg-secondary px-4 py-2 font-label text-xs uppercase text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {isSubmitting ? "Processing..." : primaryActionLabel}
+          {isSubmitting
+            ? "Processing..."
+            : isVerifyingSignIn
+              ? "VERIFY"
+              : primaryActionLabel}
         </button>
       </form>
 
-      <div className="my-4 text-center text-xs tracking-wide text-on-surface-variant">
-        ----- or -----
-      </div>
-
-      <button
-        type="button"
-        onClick={handleGoogleSubmit}
-        disabled={isBusy}
-        className="flex w-full items-center justify-center gap-2 rounded-full border border-outline/30 bg-white px-4 py-2 text-xs font-label uppercase text-on-surface transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        CONTINUE WITH GOOGLE
-      </button>
 
       {showLink ? (
         <div className="mt-5 text-center">
