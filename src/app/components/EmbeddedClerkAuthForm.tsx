@@ -232,10 +232,28 @@ export default function EmbeddedClerkAuthForm({
     }
 
     throw new Error(
-      "確認ステップが必要です。Clerkのメール確認設定を確認してください。"
+      "確認ステップが必要です。Googleで続行するか、設定を確認してください。"
     );
   };
 
+  const handleGoogle = async () => {
+    if (!isLoaded) return;
+    if (mode === "signIn" && signIn) {
+      await signIn.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: "/sso-callback",
+        redirectUrlComplete: completeRedirectUrl,
+      });
+      return;
+    }
+    if (mode === "signUp" && signUp) {
+      await signUp.authenticateWithRedirect({
+        strategy: "oauth_google",
+        redirectUrl: "/sso-callback",
+        redirectUrlComplete: completeRedirectUrl,
+      });
+    }
+  };
 
   const handlePrimarySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -264,6 +282,22 @@ export default function EmbeddedClerkAuthForm({
     }
   };
 
+  const handleGoogleSubmit = async () => {
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await handleGoogle();
+    } catch (err) {
+      setError(
+        toErrorMessage(
+          err,
+          "Google認証に失敗しました。時間をおいて再度お試しください。",
+          t
+        )
+      );
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <div className={className}>
@@ -406,6 +440,18 @@ export default function EmbeddedClerkAuthForm({
         </button>
       </form>
 
+      <div className="my-4 text-center text-xs tracking-wide text-on-surface-variant">
+        ----- or -----
+      </div>
+
+      <button
+        type="button"
+        onClick={handleGoogleSubmit}
+        disabled={isBusy}
+        className="flex w-full items-center justify-center gap-2 rounded-full border border-outline/30 bg-white px-4 py-2 text-xs font-label uppercase text-on-surface transition hover:bg-surface-container-low disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        CONTINUE WITH GOOGLE
+      </button>
 
       {showLink ? (
         <div className="mt-5 text-center">
